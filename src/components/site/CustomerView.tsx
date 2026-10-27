@@ -1141,7 +1141,7 @@ export function ContactSection({ settings }: { settings?: SettingsMap }) {
           <div className="overflow-hidden rounded-xl border border-[#e6ddc8] bg-card">
             <iframe
               title="Map — LGBI Airport, Borjhar, Guwahati"
-              src="https://www.google.com/maps?q=Lokpriya+Gopinath+Bordoloi+International+Airport&output=embed"
+              src="https://www.google.com/maps?q=Roam+Saathi&output=embed"
               className="h-full min-h-[320px] w-full"
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
