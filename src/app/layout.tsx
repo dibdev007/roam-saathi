@@ -170,7 +170,7 @@ const jsonLd = {
     "Kaziranga safari transfers",
   ],
   sameAs: [
-    "https://wa.me/919876543210",
+    "https://wa.me/916002775195",
   ],
 };
 
