@@ -19,6 +19,8 @@ import {
   Plane,
   Users,
   Mountain,
+  Fuel,
+  Gauge,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -52,17 +54,17 @@ import { toast } from "sonner";
 
 import { RhinoLogo } from "@/components/brand/RhinoLogo";
 import { WhatsAppButton } from "@/components/site/WhatsAppButton";
+import { cn } from "@/lib/utils";
 import {
   BUSINESS_NAME,
   TAGLINE,
-  EMAIL,
-  BUSINESS_PHONE,
-  BUSINESS_PHONE_DISPLAY,
-  ADDRESS_LINE,
-  HOURS,
   SERVICE_AREAS,
   PICKUP_TYPES,
   VEHICLE_CLASSES,
+  resolveSetting,
+  inr,
+  type VehicleDTO,
+  type SettingsMap,
 } from "@/lib/siteConfig";
 import { buildWhatsAppUrl, buildTelUrl, buildMailtoUrl } from "@/lib/whatsapp";
 import {
@@ -88,6 +90,36 @@ const NAV_LINKS = [
   { href: "#faq", label: "FAQ" },
   { href: "#contact", label: "Contact" },
 ];
+
+/* ------------------------------------------------------------------ */
+/* Live contact resolver — DB settings (Admin → Settings) win over     */
+/* the static siteConfig defaults, so the owner can edit contact info  */
+/* from the admin panel and the whole site updates instantly.          */
+/* ------------------------------------------------------------------ */
+export type SiteContact = {
+  phone: string;
+  phoneDisplay: string;
+  whatsapp: string;
+  email: string;
+  hours: string;
+  address: string;
+};
+
+export function getContact(settings?: SettingsMap): SiteContact {
+  const phone = resolveSetting("businessPhone", settings);
+  const raw = phone.replace(/\D/g, "");
+  const phoneDisplay = /^\d{10}$/.test(raw)
+    ? `+91 ${raw.slice(0, 5)} ${raw.slice(5)}`
+    : phone;
+  return {
+    phone,
+    phoneDisplay,
+    whatsapp: resolveSetting("whatsappNumber", settings).replace(/\D/g, ""),
+    email: resolveSetting("email", settings),
+    hours: resolveSetting("hours", settings),
+    address: resolveSetting("address", settings),
+  };
+}
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 24 },
@@ -123,8 +155,9 @@ function SectionHeading({
 /* ------------------------------------------------------------------ */
 /* Header                                                              */
 /* ------------------------------------------------------------------ */
-export function Header() {
+export function Header({ settings }: { settings?: SettingsMap }) {
   const [open, setOpen] = React.useState(false);
+  const contact = getContact(settings);
   const waMsg = `Hello ${BUSINESS_NAME}! I'd like to enquire about a vehicle rental. Please share availability and quotes.`;
 
   return (
@@ -151,14 +184,15 @@ export function Header() {
 
         <div className="flex items-center gap-2">
           <a
-            href={buildTelUrl(BUSINESS_PHONE)}
+            href={buildTelUrl(contact.phone)}
             className="hidden h-10 w-10 items-center justify-center rounded-full text-forest transition-colors hover:bg-forest/5 sm:inline-flex"
-            aria-label={`Call ${BUSINESS_PHONE_DISPLAY}`}
+            aria-label={`Call ${contact.phoneDisplay}`}
           >
             <Phone className="h-5 w-5" />
           </a>
           <WhatsAppButton
             message={waMsg}
+            phone={contact.whatsapp}
             className="hidden bg-saffron text-saffron-foreground shadow-sm hover:bg-saffron/90 sm:inline-flex"
           >
             Book on WhatsApp
@@ -196,13 +230,14 @@ export function Header() {
               <div className="mt-6 flex flex-col gap-2">
                 <WhatsAppButton
                   message={waMsg}
+                  phone={contact.whatsapp}
                   className="bg-saffron text-saffron-foreground hover:bg-saffron/90"
                 >
                   Book on WhatsApp
                 </WhatsAppButton>
-                <a href={buildTelUrl(BUSINESS_PHONE)}>
+                <a href={buildTelUrl(contact.phone)}>
                   <Button variant="outline" className="w-full border-forest/20 text-forest">
-                    <Phone className="h-4 w-4" /> Call {BUSINESS_PHONE_DISPLAY}
+                    <Phone className="h-4 w-4" /> Call {contact.phoneDisplay}
                   </Button>
                 </a>
               </div>
@@ -319,7 +354,10 @@ export function StatsStrip() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Fleet                                                               */
+/* Fleet — LIVE from the database                                      */
+/* Vehicles are managed in Admin → Fleet; this section reads them      */
+/* directly so anything the owner adds/edits shows up on the site.     */
+/* Fallback: static category cards when the database is empty.         */
 /* ------------------------------------------------------------------ */
 function FleetCard({ cat, images }: { cat: FleetCategory; images: Images }) {
   const imgKey = `${cat.imageKey}.png`;
@@ -381,20 +419,228 @@ function FleetCard({ cat, images }: { cat: FleetCategory; images: Images }) {
   );
 }
 
-export function FleetShowcase({ images }: { images: Images }) {
+const CLASS_META: Record<string, { imageKey: string; label: string }> = {
+  SUV: { imageKey: "fleet-suv", label: "SUV" },
+  HATCHBACK: { imageKey: "fleet-hatchback", label: "Hatchback" },
+  SEDAN: { imageKey: "fleet-hatchback", label: "Sedan" },
+  SCOOTER: { imageKey: "fleet-scooter", label: "Scooter" },
+  BIKE: { imageKey: "fleet-scooter", label: "Bike" },
+  VAN: { imageKey: "fleet-van", label: "Van" },
+};
+
+function vehicleImage(v: VehicleDTO, images: Images): string {
+  const fallbackKey = CLASS_META[v.class]?.imageKey ?? "fleet-suv";
+  const custom = (v.imageUrl ?? "").trim();
+  if (custom !== "") return custom; // Owner-pasted URL or bundled image
+  return images[`${fallbackKey}.png`]
+    ? `/${fallbackKey}.png`
+    : `/${fallbackKey}-fallback.svg`;
+}
+
+function LiveVehicleCard({
+  v,
+  images,
+  whatsapp,
+}: {
+  v: VehicleDTO;
+  images: Images;
+  whatsapp: string;
+}) {
+  const imgSrc = vehicleImage(v, images);
+  const featureList = (v.features ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const waMsg = `Hello ${BUSINESS_NAME}! I'd like to book the *${v.name}* (${inr(v.dailyRate)}/day self-drive). Please share availability for my dates.`;
+
+  return (
+    <Card className="group flex flex-col overflow-hidden border-[#e6ddc8] bg-card transition-shadow hover:shadow-xl">
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-forest/5">
+        {/* Owner-provided image URLs can point to any host, so a plain img is used here */}
+        <img
+          src={imgSrc}
+          alt={`${v.name} — ${CLASS_META[v.class]?.label ?? v.class} rental in Guwahati`}
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          loading="lazy"
+        />
+        <div className="absolute left-3 top-3 flex flex-wrap gap-1">
+          <Badge className="bg-forest text-cream shadow">
+            from ₹{v.dailyRate.toLocaleString("en-IN")}/day
+          </Badge>
+          {v.popular && (
+            <Badge className="bg-saffron text-saffron-foreground shadow">★ Popular</Badge>
+          )}
+        </div>
+      </div>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg text-forest">{v.name}</CardTitle>
+        <CardDescription className="line-clamp-2 text-sm">
+          {v.description || `${CLASS_META[v.class]?.label ?? v.class} · ${v.seats} seats`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col gap-3">
+        <ul className="grid grid-cols-2 gap-1.5 text-xs text-foreground/80">
+          <li className="flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5 text-forest" /> {v.seats} seats
+          </li>
+          <li className="flex items-center gap-1.5">
+            <Compass className="h-3.5 w-3.5 text-forest" /> {v.transmission}
+          </li>
+          <li className="flex items-center gap-1.5">
+            <Fuel className="h-3.5 w-3.5 text-forest" /> {v.fuelType}
+          </li>
+          <li className="flex items-center gap-1.5">
+            <Gauge className="h-3.5 w-3.5 text-forest" />{" "}
+            {v.kmLimitPerDay ? `${v.kmLimitPerDay} km/day` : "Unlimited km"}
+          </li>
+        </ul>
+
+        <div className="rounded-lg border border-[#e6ddc8] bg-cream/60 p-3 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Self-drive</span>
+            <span className="font-bold text-forest">
+              {inr(v.dailyRate)}
+              <span className="text-xs font-normal text-muted-foreground">/day</span>
+            </span>
+          </div>
+          {v.withDriverAvailable && v.withDriverPerDay != null && (
+            <div className="mt-1 flex items-center justify-between">
+              <span className="text-muted-foreground">With driver</span>
+              <span className="font-bold text-forest">
+                {inr(v.withDriverPerDay)}
+                <span className="text-xs font-normal text-muted-foreground">/day</span>
+              </span>
+            </div>
+          )}
+          {v.securityDeposit != null && (
+            <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+              <span>Refundable deposit</span>
+              <span>{inr(v.securityDeposit)}</span>
+            </div>
+          )}
+        </div>
+
+        {featureList.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {featureList.map((f) => (
+              <Badge key={f} variant="outline" className="border-forest/20 text-forest">
+                {f}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        <WhatsAppButton
+          message={waMsg}
+          phone={whatsapp}
+          className="mt-auto bg-forest text-white hover:bg-forest/90"
+          size="sm"
+        >
+          Book this vehicle
+        </WhatsAppButton>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ClassFilterButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+        active
+          ? "border-forest bg-forest text-cream shadow"
+          : "border-forest/20 bg-card text-forest/70 hover:border-forest/40 hover:text-forest",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function FleetShowcase({
+  images,
+  vehicles = [],
+  settings,
+}: {
+  images: Images;
+  vehicles?: VehicleDTO[];
+  settings?: SettingsMap;
+}) {
+  const [filter, setFilter] = React.useState<string>("ALL");
+  const whatsapp = getContact(settings).whatsapp;
+
+  const classes = React.useMemo(
+    () => Array.from(new Set(vehicles.map((v) => v.class))),
+    [vehicles],
+  );
+  const shown = React.useMemo(
+    () =>
+      filter === "ALL"
+        ? vehicles
+        : vehicles.filter((v) => v.class === filter),
+    [vehicles, filter],
+  );
+
+  if (vehicles.length === 0) {
+    // Database has no bookable vehicles yet — fall back to static categories
+    return (
+      <section id="fleet" className="scroll-mt-20 bg-cream py-16 sm:py-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <SectionHeading
+            eyebrow="Our Fleet"
+            title="A ride for every Northeast journey"
+            subtitle="Four vehicle classes, transparent per-day rates, and the option of a verified Saathi behind the wheel."
+          />
+          <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {FLEET_CATEGORIES.map((cat) => (
+              <FleetCard key={cat.key} cat={cat} images={images} />
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section id="fleet" className="scroll-mt-20 bg-cream py-16 sm:py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Our Fleet"
-          title="A ride for every Northeast journey"
-          subtitle="Four vehicle classes, transparent per-day rates, and the option of a verified Saathi behind the wheel."
+          title="Live rate card — pick your ride"
+          subtitle="Every vehicle and price below is managed directly by the Roam Saathi team. Self-drive or take a verified Saathi behind the wheel."
         />
-        <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {FLEET_CATEGORIES.map((cat) => (
-            <FleetCard key={cat.key} cat={cat} images={images} />
+        <div className="mt-8 flex flex-wrap justify-center gap-2">
+          <ClassFilterButton active={filter === "ALL"} onClick={() => setFilter("ALL")}>
+            All vehicles ({vehicles.length})
+          </ClassFilterButton>
+          {classes.map((c) => (
+            <ClassFilterButton key={c} active={filter === c} onClick={() => setFilter(c)}>
+              {CLASS_META[c]?.label ?? c} ({vehicles.filter((v) => v.class === c).length})
+            </ClassFilterButton>
           ))}
         </div>
+        <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {shown.map((v) => (
+            <LiveVehicleCard key={v.id} v={v} images={images} whatsapp={whatsapp} />
+          ))}
+        </div>
+        <p className="mt-8 text-center text-xs text-muted-foreground">
+          Prices are per day, exclude fuel for self-drive, and include standard insurance.
+          Security deposit is refunded within 24 hours of a satisfactory return.
+        </p>
       </div>
     </section>
   );
@@ -627,9 +873,22 @@ export function FAQSection() {
 /* ------------------------------------------------------------------ */
 /* Booking form                                                        */
 /* ------------------------------------------------------------------ */
-export function BookingSection() {
+export function BookingSection({
+  settings,
+  vehicles = [],
+}: {
+  settings?: SettingsMap;
+  vehicles?: VehicleDTO[];
+}) {
   const [submitting, setSubmitting] = React.useState(false);
+  const contact = getContact(settings);
   const today = new Date().toISOString().slice(0, 16);
+
+  // Vehicle class options come from the live fleet; fall back to all classes.
+  const classOptions = React.useMemo(() => {
+    const present = Array.from(new Set(vehicles.map((v) => v.class)));
+    return present.length > 0 ? present : [...VEHICLE_CLASSES];
+  }, [vehicles]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -644,6 +903,7 @@ export function BookingSection() {
       pickupDate: String(fd.get("pickupDate") ?? ""),
       returnDate: String(fd.get("returnDate") ?? ""),
       vehicleClass: String(fd.get("vehicleClass") ?? ""),
+      destination: String(fd.get("destination") ?? ""),
       withDriver: fd.get("withDriver") === "on",
       message: String(fd.get("message") ?? ""),
     };
@@ -666,17 +926,18 @@ export function BookingSection() {
     }
 
     // (a) Build WhatsApp deep link
-    const msg = `*${BUSINESS_NAME} — New Booking Enquiry*%0A%0A` +
-      `*Name:* ${data.name}%0A` +
-      `*Phone:* ${data.phone}%0A` +
-      `*Pickup type:* ${data.pickupType}%0A` +
-      `*Pickup location:* ${data.pickupLocation || "—"}%0A` +
-      `*Pickup date & time:* ${data.pickupDate.replace("T", " ")}%0A` +
-      `*Return date:* ${data.returnDate.replace("T", " ")}%0A` +
-      `*Vehicle class:* ${data.vehicleClass}%0A` +
-      `*With driver:* ${data.withDriver ? "Yes" : "No (self-drive)"}%0A` +
+    const msg = `*${BUSINESS_NAME} — New Booking Enquiry*\n\n` +
+      `*Name:* ${data.name}\n` +
+      `*Phone:* ${data.phone}\n` +
+      `*Pickup type:* ${data.pickupType}\n` +
+      `*Pickup location:* ${data.pickupLocation || "—"}\n` +
+      `*Pickup date & time:* ${data.pickupDate.replace("T", " ")}\n` +
+      `*Return date:* ${data.returnDate.replace("T", " ")}\n` +
+      `*Vehicle class:* ${data.vehicleClass}\n` +
+      `*Destination:* ${data.destination || "—"}\n` +
+      `*With driver:* ${data.withDriver ? "Yes" : "No (self-drive)"}\n` +
       `*Message:* ${data.message || "—"}`;
-    const waUrl = buildWhatsAppUrl(decodeURIComponent(msg));
+    const waUrl = buildWhatsAppUrl(msg, contact.whatsapp);
 
     // (b) Save to Prisma via API
     try {
@@ -760,11 +1021,15 @@ export function BookingSection() {
                     <SelectValue placeholder="Select vehicle class" />
                   </SelectTrigger>
                   <SelectContent>
-                    {VEHICLE_CLASSES.map((c) => (
+                    {classOptions.map((c) => (
                       <SelectItem key={c} value={c}>{c}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="destination">Destination / trip plan</Label>
+                <Input id="destination" name="destination" placeholder="e.g. Shillong + Cherrapunji, Kaziranga" />
               </div>
               <div className="flex items-end pb-2">
                 <label className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -806,7 +1071,8 @@ export function BookingSection() {
 /* ------------------------------------------------------------------ */
 /* Contact                                                             */
 /* ------------------------------------------------------------------ */
-export function ContactSection() {
+export function ContactSection({ settings }: { settings?: SettingsMap }) {
+  const contact = getContact(settings);
   const waMsg = `Hello ${BUSINESS_NAME}! I'd like to enquire about a vehicle rental.`;
   return (
     <section id="contact" className="scroll-mt-20 bg-forest/5 py-16 sm:py-20">
@@ -820,18 +1086,18 @@ export function ContactSection() {
           <Card className="border-[#e6ddc8] bg-card">
             <CardContent className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2">
               <a
-                href={buildTelUrl(BUSINESS_PHONE)}
+                href={buildTelUrl(contact.phone)}
                 className="flex items-start gap-3 rounded-lg border border-[#e6ddc8] p-4 transition-colors hover:bg-forest/5"
               >
                 <Phone className="h-5 w-5 flex-shrink-0 text-forest" />
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Call us</p>
-                  <p className="text-sm font-medium text-forest">{BUSINESS_PHONE_DISPLAY}</p>
+                  <p className="text-sm font-medium text-forest">{contact.phoneDisplay}</p>
                 </div>
               </a>
 
               <a
-                href={buildWhatsAppUrl(waMsg)}
+                href={buildWhatsAppUrl(waMsg, contact.whatsapp)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-start gap-3 rounded-lg border border-[#e6ddc8] p-4 transition-colors hover:bg-saffron/5"
@@ -844,13 +1110,13 @@ export function ContactSection() {
               </a>
 
               <a
-                href={buildMailtoUrl(EMAIL, "Vehicle rental enquiry")}
+                href={buildMailtoUrl(contact.email, "Vehicle rental enquiry")}
                 className="flex items-start gap-3 rounded-lg border border-[#e6ddc8] p-4 transition-colors hover:bg-forest/5"
               >
                 <Mail className="h-5 w-5 flex-shrink-0 text-forest" />
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Email</p>
-                  <p className="text-sm font-medium text-forest break-all">{EMAIL}</p>
+                  <p className="text-sm font-medium text-forest break-all">{contact.email}</p>
                 </div>
               </a>
 
@@ -858,7 +1124,7 @@ export function ContactSection() {
                 <Clock className="h-5 w-5 flex-shrink-0 text-forest" />
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Hours</p>
-                  <p className="text-sm font-medium text-forest">{HOURS}</p>
+                  <p className="text-sm font-medium text-forest">{contact.hours}</p>
                 </div>
               </div>
 
@@ -866,7 +1132,7 @@ export function ContactSection() {
                 <MapPin className="h-5 w-5 flex-shrink-0 text-forest" />
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Location</p>
-                  <p className="text-sm font-medium text-forest">{ADDRESS_LINE}</p>
+                  <p className="text-sm font-medium text-forest">{contact.address}</p>
                 </div>
               </div>
             </CardContent>
@@ -890,7 +1156,8 @@ export function ContactSection() {
 /* ------------------------------------------------------------------ */
 /* Footer                                                              */
 /* ------------------------------------------------------------------ */
-export function Footer() {
+export function Footer({ settings }: { settings?: SettingsMap }) {
+  const contact = getContact(settings);
   return (
     <footer className="mt-auto bg-forest text-cream">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-4 lg:px-8">
@@ -915,10 +1182,10 @@ export function Footer() {
         <div>
           <h3 className="text-sm font-bold uppercase tracking-wider text-saffron">Contact</h3>
           <ul className="mt-3 space-y-2 text-sm text-cream/85">
-            <li><a href={buildTelUrl(BUSINESS_PHONE)} className="hover:text-cream hover:underline">{BUSINESS_PHONE_DISPLAY}</a></li>
-            <li><a href={buildMailtoUrl(EMAIL)} className="hover:text-cream hover:underline break-all">{EMAIL}</a></li>
-            <li>{ADDRESS_LINE}</li>
-            <li>{HOURS}</li>
+            <li><a href={buildTelUrl(contact.phone)} className="hover:text-cream hover:underline">{contact.phoneDisplay}</a></li>
+            <li><a href={buildMailtoUrl(contact.email)} className="hover:text-cream hover:underline break-all">{contact.email}</a></li>
+            <li>{contact.address}</li>
+            <li>{contact.hours}</li>
           </ul>
         </div>
 
@@ -942,7 +1209,7 @@ export function Footer() {
             © {new Date().getFullYear()} {BUSINESS_NAME}. Tourist vehicle rental near LGBI Airport, Guwahati · Serving all Northeast India.
           </p>
           <p className="text-cream/50">
-            Made with care in Assam · {`WhatsApp +${BUSINESS_PHONE.replace(/[^\d]/g, "")}`}
+            Made with care in Assam · {`WhatsApp +${contact.whatsapp}`}
           </p>
         </div>
       </div>
@@ -953,23 +1220,31 @@ export function Footer() {
 /* ------------------------------------------------------------------ */
 /* Customer view (composite)                                           */
 /* ------------------------------------------------------------------ */
-export function CustomerView({ images }: { images: Images }) {
+export function CustomerView({
+  images,
+  vehicles = [],
+  settings = {},
+}: {
+  images: Images;
+  vehicles?: VehicleDTO[];
+  settings?: SettingsMap;
+}) {
   return (
     <>
-      <Header />
+      <Header settings={settings} />
       <main>
         <Hero images={images} />
         <StatsStrip />
-        <FleetShowcase images={images} />
+        <FleetShowcase images={images} vehicles={vehicles} settings={settings} />
         <RoutesSection />
         <HowItWorks />
         <WhySection />
         <ReviewsSection />
         <FAQSection />
-        <BookingSection />
-        <ContactSection />
+        <BookingSection settings={settings} vehicles={vehicles} />
+        <ContactSection settings={settings} />
       </main>
-      <Footer />
+      <Footer settings={settings} />
     </>
   );
 }

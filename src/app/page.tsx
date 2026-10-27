@@ -1,6 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { RoamSaathiApp } from "@/components/site/RoamSaathiApp";
+import { db } from "@/lib/db";
+import type { VehicleDTO, SettingsMap } from "@/lib/siteConfig";
 
 export const dynamic = "force-dynamic";
 
@@ -21,53 +23,119 @@ const PUBLIC_DIR = path.join(process.cwd(), "public");
 const BRAND_DIR = path.join(process.cwd(), "download", "brand");
 
 /**
- * Build a map of {filename: exists} for the WANTED_IMAGES list, checking
- * /public first and then /download/brand (the directory the image-generation
- * agent writes to). If a brand image is in /download/brand but not /public,
- * we copy it across so next/image can serve it.
+ * Build a map of {filename: exists} for the WANTED_IMAGES list.
+ *
+ * Sandbox: checks /public first, then copies from /download/brand if present.
+ * Production (Vercel & co.): the serverless filesystem is read-only and
+ * /public may not be visible from this function — but every shipped image IS
+ * served by the platform from /public. So we only report an image as missing
+ * when we can positively see the public directory AND the file is absent in
+ * it. If the directory itself cannot be found or fs errors out, we assume the
+ * shipped images exist (the deployed site always has them).
  */
 function detectImages(): Record<string, boolean> {
+  const allShipped = (): Record<string, boolean> =>
+    Object.fromEntries(WANTED_IMAGES.map((n) => [n, true]));
+
   const map: Record<string, boolean> = {};
   try {
-    if (!fs.existsSync(PUBLIC_DIR)) fs.mkdirSync(PUBLIC_DIR, { recursive: true });
-  } catch {
-    /* ignore */
-  }
+    // Public dir not visible (typical on serverless) -> shipped assets are
+    // still served by the platform, so treat them as present.
+    if (!fs.existsSync(PUBLIC_DIR)) return allShipped();
 
-  let brandFiles: string[] = [];
-  try {
-    brandFiles = fs.existsSync(BRAND_DIR) ? fs.readdirSync(BRAND_DIR) : [];
-  } catch {
-    brandFiles = [];
-  }
-
-  for (const name of WANTED_IMAGES) {
-    const pubPath = path.join(PUBLIC_DIR, name);
-    let exists = false;
+    let brandFiles: string[] = [];
     try {
-      exists = fs.existsSync(pubPath);
+      brandFiles = fs.existsSync(BRAND_DIR) ? fs.readdirSync(BRAND_DIR) : [];
     } catch {
-      exists = false;
+      brandFiles = [];
     }
 
-    if (!exists) {
-      // Try to copy from /download/brand if present
-      const brandPath = path.join(BRAND_DIR, name);
+    for (const name of WANTED_IMAGES) {
+      const pubPath = path.join(PUBLIC_DIR, name);
+      let exists = false;
       try {
-        if (fs.existsSync(brandPath)) {
-          fs.copyFileSync(brandPath, pubPath);
-          exists = true;
-        }
+        exists = fs.existsSync(pubPath);
       } catch {
-        /* ignore copy errors */
+        exists = false;
       }
+
+      if (!exists) {
+        // Try to copy from /download/brand if present (sandbox convenience)
+        const brandPath = path.join(BRAND_DIR, name);
+        try {
+          if (brandFiles.includes(name) && fs.existsSync(brandPath)) {
+            fs.copyFileSync(brandPath, pubPath);
+            exists = true;
+          }
+        } catch {
+          /* read-only fs — ignore copy errors */
+        }
+      }
+      map[name] = exists;
     }
-    map[name] = exists;
+    return map;
+  } catch {
+    // fs unavailable or unexpected error -> assume the shipped images exist.
+    return allShipped();
   }
-  return map;
 }
 
-export default function Page() {
+/**
+ * Load live data from the database (vehicles + settings).
+ * If the database is unreachable we degrade gracefully to empty values —
+ * the UI falls back to the static content and siteConfig defaults.
+ */
+async function loadSiteData(): Promise<{
+  vehicles: VehicleDTO[];
+  settings: SettingsMap;
+}> {
+  try {
+    const [vehicleRows, settingsRows] = await Promise.all([
+      db.vehicle.findMany({
+        where: { available: true },
+        orderBy: [{ sortOrder: "asc" }, { dailyRate: "asc" }],
+      }),
+      db.settings.findMany(),
+    ]);
+
+    const settings: SettingsMap = {};
+    for (const r of settingsRows) settings[r.key] = r.value;
+
+    // Serialize dates -> strings for the client components
+    const vehicles: VehicleDTO[] = vehicleRows.map((v) => ({
+      id: v.id,
+      name: v.name,
+      brand: v.brand,
+      class: v.class,
+      seats: v.seats,
+      transmission: v.transmission,
+      fuelType: v.fuelType,
+      dailyRate: v.dailyRate,
+      withDriverPerDay: v.withDriverPerDay,
+      withDriverAvailable: v.withDriverAvailable,
+      monthlyRate: v.monthlyRate,
+      kmLimitPerDay: v.kmLimitPerDay,
+      extraKmRate: v.extraKmRate,
+      securityDeposit: v.securityDeposit,
+      driverBata: v.driverBata,
+      registrationNumber: v.registrationNumber,
+      imageUrl: v.imageUrl,
+      features: v.features,
+      description: v.description,
+      available: v.available,
+      popular: v.popular,
+      sortOrder: v.sortOrder,
+    }));
+
+    return { vehicles, settings };
+  } catch (e) {
+    console.error("[page] Failed to load site data from DB:", e);
+    return { vehicles: [], settings: {} };
+  }
+}
+
+export default async function Page() {
   const images = detectImages();
-  return <RoamSaathiApp images={images} />;
+  const { vehicles, settings } = await loadSiteData();
+  return <RoamSaathiApp images={images} vehicles={vehicles} settings={settings} />;
 }

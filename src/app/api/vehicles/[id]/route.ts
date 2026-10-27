@@ -5,7 +5,13 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** PATCH /api/vehicles/[id] — update a vehicle. */
+const numOrNull = (v: unknown): number | null => {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n) : null;
+};
+
+/** PATCH /api/vehicles/[id] — update any vehicle field. */
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   try {
     const { id } = await params;
@@ -13,15 +19,45 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const updated = await db.vehicle.update({
       where: { id },
       data: {
-        ...(b.name != null ? { name: String(b.name) } : {}),
+        ...(b.name != null ? { name: String(b.name).trim().slice(0, 120) } : {}),
+        ...(b.brand !== undefined
+          ? { brand: b.brand ? String(b.brand).trim().slice(0, 60) : null }
+          : {}),
         ...(b.class != null ? { class: String(b.class) } : {}),
-        ...(b.seats != null ? { seats: Number(b.seats) } : {}),
+        ...(b.seats != null ? { seats: Math.max(1, Number(b.seats) || 4) } : {}),
         ...(b.transmission != null ? { transmission: String(b.transmission) } : {}),
-        ...(b.dailyRate != null ? { dailyRate: Number(b.dailyRate) } : {}),
-        ...(b.withDriverAvailable != null ? { withDriverAvailable: Boolean(b.withDriverAvailable) } : {}),
-        ...(b.imageUrl != null ? { imageUrl: b.imageUrl ? String(b.imageUrl) : null } : {}),
+        ...(b.fuelType != null ? { fuelType: String(b.fuelType) } : {}),
+        ...(b.dailyRate != null ? { dailyRate: Math.max(0, Number(b.dailyRate) || 0) } : {}),
+        ...(b.withDriverPerDay !== undefined
+          ? { withDriverPerDay: numOrNull(b.withDriverPerDay) }
+          : {}),
+        ...(b.withDriverAvailable != null
+          ? { withDriverAvailable: Boolean(b.withDriverAvailable) }
+          : {}),
+        ...(b.monthlyRate !== undefined ? { monthlyRate: numOrNull(b.monthlyRate) } : {}),
+        ...(b.kmLimitPerDay !== undefined ? { kmLimitPerDay: numOrNull(b.kmLimitPerDay) } : {}),
+        ...(b.extraKmRate !== undefined ? { extraKmRate: numOrNull(b.extraKmRate) } : {}),
+        ...(b.securityDeposit !== undefined
+          ? { securityDeposit: numOrNull(b.securityDeposit) }
+          : {}),
+        ...(b.driverBata !== undefined ? { driverBata: numOrNull(b.driverBata) } : {}),
+        ...(b.registrationNumber !== undefined
+          ? {
+              registrationNumber: b.registrationNumber
+                ? String(b.registrationNumber).trim().toUpperCase().slice(0, 20)
+                : null,
+            }
+          : {}),
+        ...(b.imageUrl !== undefined
+          ? { imageUrl: b.imageUrl ? String(b.imageUrl).trim() : null }
+          : {}),
+        ...(b.features !== undefined
+          ? { features: b.features ? String(b.features).trim().slice(0, 500) : null }
+          : {}),
+        ...(b.description != null ? { description: String(b.description).slice(0, 1000) } : {}),
         ...(b.available != null ? { available: Boolean(b.available) } : {}),
-        ...(b.description != null ? { description: String(b.description) } : {}),
+        ...(b.popular != null ? { popular: Boolean(b.popular) } : {}),
+        ...(b.sortOrder != null ? { sortOrder: Number(b.sortOrder) || 100 } : {}),
       },
     });
     return NextResponse.json({ ok: true, vehicle: updated });
@@ -31,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   }
 }
 
-/** DELETE /api/vehicles/[id] — delete a vehicle. */
+/** DELETE /api/vehicles/[id] — remove a vehicle. */
 export async function DELETE(_req: NextRequest, { params }: Ctx) {
   try {
     const { id } = await params;

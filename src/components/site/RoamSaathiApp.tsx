@@ -8,7 +8,7 @@ import { Car, ShieldCheck } from "lucide-react";
 import { CustomerView } from "@/components/site/CustomerView";
 import { AdminPortal } from "@/components/admin/AdminPortal";
 import { RhinoLogo } from "@/components/brand/RhinoLogo";
-import { BUSINESS_NAME, TAGLINE } from "@/lib/siteConfig";
+import { BUSINESS_NAME, TAGLINE, type VehicleDTO, type SettingsMap } from "@/lib/siteConfig";
 
 type View = "customer" | "admin";
 type Images = Record<string, boolean>;
@@ -19,7 +19,15 @@ const VIEW_STORAGE_KEY = "rs_view";
  * Top-level client app — switches between Customer and Admin views.
  * The view toggle is persisted to localStorage so reloads don't lose context.
  */
-export function RoamSaathiApp({ images }: { images: Images }) {
+export function RoamSaathiApp({
+  images,
+  vehicles = [],
+  settings = {},
+}: {
+  images: Images;
+  vehicles?: VehicleDTO[];
+  settings?: SettingsMap;
+}) {
   const [view, setView] = React.useState<View>("customer");
 
   // Restore view on mount (client-only, no SSR mismatch)
@@ -70,7 +78,7 @@ export function RoamSaathiApp({ images }: { images: Images }) {
             </Tabs>
           </div>
         </div>
-        <AdminPortal onExit={() => changeView("customer")} />
+        <AdminPortal onExit={() => changeView("customer")} dbSettings={settings} />
       </div>
     );
   }
@@ -96,7 +104,7 @@ export function RoamSaathiApp({ images }: { images: Images }) {
           </Tabs>
         </div>
       </div>
-      <CustomerView images={images} />
+      <CustomerView images={images} vehicles={vehicles} settings={settings} />
     </div>
   );
 }

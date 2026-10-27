@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { BOOKING_STATUSES } from "@/lib/siteConfig";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/bookings — list all bookings (admin). */
+/** GET /api/bookings — list bookings (?status=&q= filters, admin). */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
@@ -12,10 +13,10 @@ export async function GET(req: NextRequest) {
   const where: Record<string, unknown> = {};
   if (status && status !== "all") where.status = status;
   if (q) {
-    // SQLite doesn't support mode: 'insensitive' — use contains with default.
     where.OR = [
       { name: { contains: q } },
       { phone: { contains: q } },
+      { vehicleName: { contains: q } },
     ];
   }
 
@@ -32,7 +33,6 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Basic server-side validation
     const required = ["name", "phone", "pickupType", "pickupDate", "returnDate", "vehicleClass"];
     for (const f of required) {
       if (!body?.[f] || String(body[f]).trim() === "") {
@@ -61,7 +61,12 @@ export async function POST(req: NextRequest) {
         pickupDate,
         returnDate,
         vehicleClass: String(body.vehicleClass),
+        vehicleName: body.vehicleName ? String(body.vehicleName).slice(0, 120) : null,
+        destination: body.destination ? String(body.destination).slice(0, 300) : null,
         withDriver: Boolean(body.withDriver),
+        estimatedTotal: body.estimatedTotal != null && Number(body.estimatedTotal) > 0
+          ? Math.round(Number(body.estimatedTotal))
+          : null,
         message: body.message ? String(body.message).slice(0, 2000) : null,
         status: "New",
       },
@@ -77,7 +82,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** PATCH /api/bookings — update status (admin). */
+/** PATCH /api/bookings — update status (admin). Body: { id, status } */
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json();
@@ -85,8 +90,7 @@ export async function PATCH(req: NextRequest) {
     if (!id || !status) {
       return NextResponse.json({ error: "id and status required" }, { status: 400 });
     }
-    const allowed = ["New", "Contacted", "Confirmed", "Cancelled"];
-    if (!allowed.includes(status)) {
+    if (!(BOOKING_STATUSES as readonly string[]).includes(status)) {
       return NextResponse.json({ error: "invalid status" }, { status: 400 });
     }
     const updated = await db.booking.update({
