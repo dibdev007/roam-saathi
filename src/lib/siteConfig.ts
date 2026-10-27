@@ -6,11 +6,11 @@ export const TAGLINE = "Your Northeast Road Companion";
 export const EMAIL = "saathiroam@gmail.com";
 
 // PLACEHOLDER — owner must replace these with the actual personal mobile number.
-export const BUSINESS_PHONE = "+919876543210";
-export const BUSINESS_PHONE_DISPLAY = "+91 98XXX XXXXX";
+export const BUSINESS_PHONE = "+916002775195";
+export const BUSINESS_PHONE_DISPLAY = "+91 6002775195";
 
 // WhatsApp number — digits only, no plus sign, no spaces. Same as BUSINESS_PHONE minus '+'.
-export const WHATSAPP_NUMBER = "919876543210";
+export const WHATSAPP_NUMBER = "916002775195";
 
 export const ADDRESS_LINE =
   "Near Lokpriya Gopinath Bordoloi International Airport, Borjhar, Guwahati, Assam 781015";
