@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+
+# next.js build output
+.next/
+out/
+build/
+
+# secrets — NEVER commit these
+.env
+.env*.local
+
+# local databases and logs
+*.db
+db/
+dev.log
+server.log/
+
+# misc
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
