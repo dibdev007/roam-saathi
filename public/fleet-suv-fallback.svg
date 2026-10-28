@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <linearGradient id="suvbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14532D"/>
+      <stop offset="1" stop-color="#16A34A"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#suvbg)"/>
+  <path d="M0 500 C 200 460, 400 540, 800 460 L 800 600 L 0 600 Z" fill="#F59E0B" opacity="0.85"/>
+  <!-- SUV silhouette -->
+  <g transform="translate(160,180)" fill="#FFFBF5">
+    <path d="M0 180 L 30 120 L 110 100 L 200 100 L 280 130 L 380 150 L 420 180 L 420 230 L 0 230 Z"/>
+    <rect x="60" y="110" width="80" height="50" rx="8" fill="#14532D" opacity="0.4"/>
+    <rect x="180" y="110" width="80" height="50" rx="8" fill="#14532D" opacity="0.4"/>
+    <circle cx="100" cy="230" r="32" fill="#1C2B23"/>
+    <circle cx="320" cy="230" r="32" fill="#1C2B23"/>
+    <circle cx="100" cy="230" r="14" fill="#FFFBF5"/>
+    <circle cx="320" cy="230" r="14" fill="#FFFBF5"/>
+  </g>
+  <text x="400" y="540" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="40" font-weight="800" fill="#FFFBF5">SUVs</text>
+</svg>
