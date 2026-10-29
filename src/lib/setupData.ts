@@ -16,9 +16,10 @@
  * are always in agreement.
  */
 
+import { randomBytes } from "node:crypto";
 import { hashPassword, DEFAULT_PASSWORD } from "./auth";
 
-const VEHICLE_DDL = `
+export const VEHICLE_DDL = `
 CREATE TABLE IF NOT EXISTS "Vehicle" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -49,7 +50,7 @@ CREATE TABLE IF NOT EXISTS "Vehicle" (
     CONSTRAINT "Vehicle_pkey" PRIMARY KEY ("id")
 )`;
 
-const BOOKING_DDL = `
+export const BOOKING_DDL = `
 CREATE TABLE IF NOT EXISTS "Booking" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -70,7 +71,7 @@ CREATE TABLE IF NOT EXISTS "Booking" (
     CONSTRAINT "Booking_pkey" PRIMARY KEY ("id")
 )`;
 
-const SETTINGS_DDL = `
+export const SETTINGS_DDL = `
 CREATE TABLE IF NOT EXISTS "Settings" (
     "id" TEXT NOT NULL,
     "key" TEXT NOT NULL,
@@ -78,7 +79,7 @@ CREATE TABLE IF NOT EXISTS "Settings" (
     CONSTRAINT "Settings_pkey" PRIMARY KEY ("id")
 )`;
 
-const PAGE_DDL = `
+export const PAGE_DDL = `
 CREATE TABLE IF NOT EXISTS "Page" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -100,7 +101,7 @@ CREATE TABLE IF NOT EXISTS "Page" (
     CONSTRAINT "Page_pkey" PRIMARY KEY ("id")
 )`;
 
-const HOTEL_DDL = `
+export const HOTEL_DDL = `
 CREATE TABLE IF NOT EXISTS "Hotel" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -125,7 +126,7 @@ CREATE TABLE IF NOT EXISTS "Hotel" (
     CONSTRAINT "Hotel_pkey" PRIMARY KEY ("id")
 )`;
 
-const INDEX_DDLS = [
+export const INDEX_DDLS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "Settings_key_key" ON "Settings"("key")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "Page_slug_key" ON "Page"("slug")`,
 ];
@@ -172,7 +173,7 @@ type SeedVehicle = {
   sortOrder: number;
 };
 
-const IMG: Record<string, string> = {
+export const IMG: Record<string, string> = {
   SUV: "/fleet-suv.png",
   HATCHBACK: "/fleet-hatchback.png",
   SEDAN: "/fleet-hatchback.png",
@@ -360,6 +361,47 @@ export const SEED_VEHICLES: SeedVehicle[] = [
   },
 ];
 
+/**
+ * v6 security — lightweight per-boot sync of security-critical settings on
+ * EXISTING databases (the fast path of ensureDatabaseReady skips full
+ * provisioning). Idempotent, runs at most once per serverless instance:
+ *   1. Purges the legacy PLAINTEXT adminPasscode row when a hash exists.
+ *   2. Guarantees sessionSecret / sessionEpoch / lockout keys exist.
+ */
+export async function ensureSecurityKeys(db: ProvisionDb): Promise<void> {
+  const model = db.settings as unknown as {
+    findMany: () => Promise<{ key: string; value: string }[]>;
+    create: (a: object) => Promise<object>;
+    delete: (a: { where: { key: string } }) => Promise<unknown>;
+  };
+  const rows = await model.findMany();
+  const map = new Map(rows.map((r) => [r.key, r.value]));
+
+  if (map.has("adminPasswordHash") && map.has("adminPasscode")) {
+    try {
+      await model.delete({ where: { key: "adminPasscode" } });
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  const needed: { key: string; value: string }[] = [];
+  if (!map.has("sessionSecret")) {
+    needed.push({ key: "sessionSecret", value: randomBytes(32).toString("base64url") });
+  }
+  if (!map.has("sessionEpoch")) needed.push({ key: "sessionEpoch", value: "1" });
+  if (!map.has("loginFailCount")) needed.push({ key: "loginFailCount", value: "0" });
+  if (!map.has("loginFailCountAt")) needed.push({ key: "loginFailCountAt", value: "0" });
+  if (!map.has("loginLockUntil")) needed.push({ key: "loginLockUntil", value: "" });
+  for (const n of needed) {
+    try {
+      await model.create({ data: n });
+    } catch {
+      /* best-effort */
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Default settings (v3)                                              */
 /* ------------------------------------------------------------------ */
@@ -378,9 +420,15 @@ export function buildDefaultSettings(): { key: string; value: string }[] {
       value:
         "Near Lokpriya Gopinath Bordoloi International Airport, Borjhar, Guwahati, Assam 781015",
     },
-    { key: "adminPasscode", value: DEFAULT_PASSWORD },
+    // v6 security: the plaintext passcode is NEVER stored anymore — only the
+    // salted scrypt hash. A random per-installation session-signing secret is
+    // generated here so no secret ever lives in the public GitHub repo.
     { key: "adminPasswordHash", value: hash },
     { key: "adminPasswordSalt", value: salt },
+    { key: "sessionSecret", value: randomBytes(32).toString("base64url") },
+    { key: "sessionEpoch", value: "1" },
+    { key: "loginFailCount", value: "0" },
+    { key: "loginLockUntil", value: "" },
     { key: "mapEmbedUrl", value: DEFAULT_MAP_EMBED },
     { key: "fuelPricePerLitre", value: "100" },
     { key: "destinationsJson", value: JSON.stringify(DEFAULT_DESTINATIONS) },
@@ -658,6 +706,20 @@ export async function ensureV3Defaults(db: ProvisionDb): Promise<{
     if (!have.has(d.key)) {
       await settingsModel.create({ data: { key: d.key, value: d.value } });
       settingsAdded.push(d.key);
+    }
+  }
+
+  // 1b. v6 security cleanup — remove the legacy PLAINTEXT passcode row once
+  // a hash exists (login no longer needs it; keeping it would leak the
+  // starter password through exports and client payloads).
+  const cleanupModel = db.settings as unknown as {
+    delete: (a: { where: { key: string } }) => Promise<unknown>;
+  };
+  if (have.has("adminPasswordHash") && have.has("adminPasscode")) {
+    try {
+      await cleanupModel.delete({ where: { key: "adminPasscode" } });
+    } catch {
+      /* best-effort */
     }
   }
 

@@ -10,6 +10,7 @@ import { ScrollProgress } from "@/components/site/motion";
 import { getContact } from "@/lib/contact";
 import { getSiteSeo } from "@/lib/seo";
 import { buildWhatsAppUrl } from "@/lib/whatsapp";
+import { stripSecretSettings } from "@/lib/auth";
 import { hotelImages, type HotelDTO, type SettingsMap, type PageDTO } from "@/lib/siteConfig";
 
 export const dynamic = "force-dynamic";
@@ -18,9 +19,9 @@ async function loadSettings(): Promise<SettingsMap> {
   try {
     await ensureDatabaseReady();
     const rows = await db.settings.findMany();
-    const map: Record<string, string> = {};
-    for (const r of rows) map[r.key] = r.value;
-    return map;
+    return stripSecretSettings(
+      Object.fromEntries(rows.map((r) => [r.key, r.value]))
+    ) as SettingsMap;
   } catch {
     return {};
   }

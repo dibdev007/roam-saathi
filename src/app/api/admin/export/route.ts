@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/dbReady";
-import { isAdmin } from "@/lib/auth";
+import { requireAdmin, SECRET_SETTINGS_KEYS } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * (vehicles + bookings + settings). Used by Admin → Database → "Download backup".
  */
 export async function GET(req: NextRequest) {
-  if (!isAdmin(req)) {
+  if (!(await requireAdmin(req))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
   try {
@@ -24,7 +24,8 @@ export async function GET(req: NextRequest) {
 
     const settings: Record<string, string> = {};
     for (const r of settingsRows) {
-      if (r.key !== "adminPasswordHash" && r.key !== "adminPasswordSalt") settings[r.key] = r.value;
+      // Backups never contain credentials or session/lockout material.
+      if (!SECRET_SETTINGS_KEYS.includes(r.key as never)) settings[r.key] = r.value;
     }
 
     const payload = {

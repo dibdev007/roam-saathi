@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
-  isAdmin,
+  requireAdmin,
   loadAdminCredentials,
   verifyAdminPassword,
   hashPassword,
+  DEFAULT_PASSWORD,
+  bumpSessionEpoch,
+  createSessionToken,
+  SESSION_COOKIE,
+  sessionCookieOptions,
 } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -14,13 +19,17 @@ export const dynamic = "force-dynamic";
  * Requires a valid admin session AND the current password.
  * Body: { currentPassword, newPassword }
  *
- * This is the v3 fix: the password is stored as a salted scrypt hash in the
- * cloud database (Settings keys adminPasswordHash / adminPasswordSalt), so
- * the change persists everywhere — including on Vercel + Postgres.
+ * v6 security:
+ *   - Origin-checked (CSRF) via requireAdmin.
+ *   - Minimum 8 characters; the publicly-known starter password is rejected.
+ *   - The session epoch is bumped, which instantly invalidates EVERY admin
+ *     session everywhere (a stolen cookie becomes useless). A fresh cookie
+ *     for the current browser is returned in the same response.
+ *   - Clears the forced-change flag so the portal unlocks.
  */
 export async function POST(req: NextRequest) {
   try {
-    if (!isAdmin(req)) {
+    if (!(await requireAdmin(req))) {
       return NextResponse.json({ error: "Not authorized" }, { status: 401 });
     }
 
@@ -30,9 +39,15 @@ export async function POST(req: NextRequest) {
     const newPassword =
       typeof body?.newPassword === "string" ? body.newPassword : "";
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       return NextResponse.json(
-        { error: "New password must be at least 6 characters." },
+        { error: "New password must be at least 8 characters." },
+        { status: 400 }
+      );
+    }
+    if (newPassword === DEFAULT_PASSWORD) {
+      return NextResponse.json(
+        { error: "That password is publicly known — choose something unique." },
         { status: 400 }
       );
     }
@@ -50,11 +65,18 @@ export async function POST(req: NextRequest) {
       db.settings.upsert({ where: { key }, update: { value }, create: { key, value } });
     await upsert("adminPasswordHash", hash);
     await upsert("adminPasswordSalt", salt);
+    await upsert("adminMustChangePassword", "0");
 
-    return NextResponse.json({
+    // Kill every existing admin session, then re-issue for THIS browser so
+    // the owner stays signed in here while any stolen cookie dies.
+    await bumpSessionEpoch();
+
+    const res = NextResponse.json({
       ok: true,
-      message: "Password changed. Use the new password from next login.",
+      message: "Password changed. All other sessions were signed out.",
     });
+    res.cookies.set(SESSION_COOKIE, await createSessionToken(), sessionCookieOptions());
+    return res;
   } catch (e) {
     console.error("[POST /api/admin/password] error:", e);
     return NextResponse.json({ error: "Could not change password" }, { status: 500 });

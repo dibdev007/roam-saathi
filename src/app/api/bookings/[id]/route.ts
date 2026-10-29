@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { BOOKING_STATUSES } from "@/lib/siteConfig";
-import { isAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 /** PATCH /api/bookings/[id] — update status and/or details. Admin only. */
 export async function PATCH(req: NextRequest, { params }: Ctx) {
-  if (!isAdmin(req)) {
+  if (!(await requireAdmin(req))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
   try {
@@ -47,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 
 /** DELETE /api/bookings/[id] — remove a booking (admin). */
 export async function DELETE(req: NextRequest, { params }: Ctx) {
-  if (!isAdmin(req)) {
+  if (!(await requireAdmin(req))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
   try {

@@ -27,7 +27,7 @@
  */
 
 import { db } from "./db";
-import { provisionDatabase } from "./setupData";
+import { provisionDatabase, ensureSecurityKeys } from "./setupData";
 
 type ReadyState = {
   ok: boolean;
@@ -42,6 +42,13 @@ async function run(): Promise<ReadyState> {
   try {
     const [v, h] = await Promise.all([db.vehicle.count(), db.hotel.count()]);
     if (v > 0 && h > 0) {
+      // v6 security: purge legacy plaintext credentials + ensure session
+      // keys even on established databases (idempotent, once per instance).
+      try {
+        await ensureSecurityKeys(db as unknown as Parameters<typeof ensureSecurityKeys>[0]);
+      } catch {
+        /* best-effort — never block the request */
+      }
       return { ok: true, action: "ready" };
     }
     // Tables exist but are empty → fall through and seed them.

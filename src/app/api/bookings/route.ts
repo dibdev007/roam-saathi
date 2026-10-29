@@ -2,13 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/dbReady";
 import { BOOKING_STATUSES } from "@/lib/siteConfig";
-import { isAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+/* Light per-instance throttle for the public enquiry form (spam brake). */
+const postHits = new Map<string, { count: number; resetAt: number }>();
+const POST_WINDOW_MS = 60 * 60 * 1000;
+const POST_MAX = 10;
+
+function postThrottled(ip: string): boolean {
+  const now = Date.now();
+  const rec = postHits.get(ip);
+  if (!rec || rec.resetAt < now) {
+    postHits.set(ip, { count: 1, resetAt: now + POST_WINDOW_MS });
+    return false;
+  }
+  rec.count += 1;
+  return rec.count > POST_MAX;
+}
+
 /** GET /api/bookings — list bookings (?status=&q= filters). Admin only. */
 export async function GET(req: NextRequest) {
-  if (!isAdmin(req)) {
+  if (!(await requireAdmin(req))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
   await ensureDatabaseReady();
@@ -37,10 +53,27 @@ export async function GET(req: NextRequest) {
 /** POST /api/bookings — create a new booking enquiry (public). */
 export async function POST(req: NextRequest) {
   try {
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("x-real-ip") ||
+      "unknown";
+    if (postThrottled(ip)) {
+      return NextResponse.json(
+        { error: "Too many enquiries from this connection. Please try later or use WhatsApp." },
+        { status: 429 }
+      );
+    }
+
     // Self-healing: even on a brand-new database the enquiry is saved —
     // tables are created on demand before the insert.
     await ensureDatabaseReady();
     const body = await req.json();
+
+    // Honeypot: hidden field real users never fill. Bots that do are told
+    // "ok" but nothing is stored.
+    if (typeof body?.company === "string" && body.company.trim() !== "") {
+      return NextResponse.json({ ok: true }, { status: 201 });
+    }
 
     const required = ["name", "phone", "pickupType", "pickupDate", "returnDate", "vehicleClass"];
     for (const f of required) {
@@ -50,6 +83,14 @@ export async function POST(req: NextRequest) {
           { status: 400 },
         );
       }
+    }
+
+    const digits = String(body.phone).replace(/\D/g, "");
+    if (digits.length < 10 || digits.length > 13) {
+      return NextResponse.json(
+        { error: "Please enter a valid phone number." },
+        { status: 400 },
+      );
     }
 
     const pickupDate = new Date(body.pickupDate);
@@ -94,7 +135,7 @@ export async function POST(req: NextRequest) {
 /** PATCH /api/bookings — update status (admin). Body: { id, status } */
 export async function PATCH(req: NextRequest) {
   try {
-    if (!isAdmin(req)) {
+    if (!(await requireAdmin(req))) {
       return NextResponse.json({ error: "Not authorized" }, { status: 401 });
     }
     await ensureDatabaseReady();

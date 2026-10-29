@@ -275,7 +275,9 @@ const settings = [
     value:
       "Near Lokpriya Gopinath Bordoloi International Airport, Borjhar, Guwahati, Assam 781015",
   },
-  { key: "adminPasscode", value: "roam2024" },
+  // v6 security: no plaintext passcode here. The starter password hash is
+  // provisioned by src/lib/setupData.ts (salted scrypt); session + lockout
+  // keys are created automatically on first request.
 ];
 
 /* ------------------------------------------------------------------ */

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { isAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ function slugify(s: string): string {
 
 /** GET /api/admin/pages — all pages (drafts included). Admin only. */
 export async function GET(req: NextRequest) {
-  if (!isAdmin(req)) {
+  if (!(await requireAdmin(req))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
   const pages = await db.page.findMany({
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
 /** POST /api/admin/pages — create a page. Admin only. */
 export async function POST(req: NextRequest) {
-  if (!isAdmin(req)) {
+  if (!(await requireAdmin(req))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
   try {

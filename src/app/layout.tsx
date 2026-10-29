@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/dbReady";
 import { getSiteSeo } from "@/lib/seo";
 import { MarketingScripts } from "@/components/site/Analytics";
+import { stripSecretSettings } from "@/lib/auth";
 import {
   BUSINESS_NAME,
   TAGLINE,
@@ -37,7 +38,9 @@ async function loadSettings(): Promise<SettingsMap> {
     const rows = await db.settings.findMany();
     const map: Record<string, string> = {};
     for (const r of rows) map[r.key] = r.value;
-    return map;
+    // v6 security: credentials/session material never reach client
+    // components (they would be serialized into the HTML payload).
+    return stripSecretSettings(map) as SettingsMap;
   } catch {
     return {};
   }

@@ -1,7 +1,39 @@
-# Roam Saathi Website — v5 (Deployment Package)
+# Roam Saathi Website — v6 (Security-Hardened Deployment Package)
 
 Tourist-only car rental site beside LGBI Airport, Guwahati — full owner
 control room at the hidden `/admin` route.
+
+## What's new in v6 — full security hardening
+
+An independent audit found real exposures in v5 (the setup key `roam2024`
+inside the public JavaScript bundle, a forgeable session secret committed
+to the public GitHub repo, and credential material serialized into the
+homepage HTML). v6 fixes all of them and adds defence in depth:
+
+1. **Nothing forgeable lives in the code.** The session-signing secret is
+   now generated randomly per installation and stored in YOUR database —
+   the public repo contains no secret an attacker could use.
+2. **The setup endpoint is disabled by default.** The site provisions
+   itself; the old `?key=roam2024` shortcut is gone forever. (Optional
+   manual provisioning exists via the `ADMIN_SETUP_KEY` environment
+   variable — see `.env.example`.)
+3. **No secret ever reaches the browser.** Credentials, session material
+   and lockout counters are stripped from every page payload, API response
+   and backup file.
+4. **Forced first password change.** The publicly-known starter password
+   still works exactly once — the portal then refuses to open until you
+   set your own 8+ character password.
+5. **Brute-force lockout that persists.** 8 failed logins lock the portal
+   for ~15 minutes — recorded in the database, so it works across all
+   serverless instances.
+6. **Stolen sessions die instantly.** Every password change revokes ALL
+   existing admin sessions everywhere (session epoch).
+7. **CSRF protection** on every admin mutation (same-origin checks) and a
+   **SameSite=Strict, httpOnly** session cookie.
+8. **Security headers everywhere** — CSP, HSTS, X-Frame-Options,
+   nosniff, strict referrer policy; `/admin` and `/api` are `noindex`.
+9. **Spam-hardened booking form** — honeypot field, per-IP throttle and
+   phone-number validation.
 
 ## What's new in v5 — the "empty fleet" fix
 
@@ -35,7 +67,8 @@ table and the per-page **SEO columns** that v4's manual setup path missed.
 | `/p/<slug>` | Owner-created pages (blogs, travel diaries, customer stories, policies) with sub-pages, homepage visibility and per-page SEO fields |
 | Admin `/admin` | Hidden portal (no public link, `noindex`): Dashboard, Fleet & prices CRUD, Bookings pipeline, No-code page builder, Stays & Partners manager, Growth & SEO (meta tags, Search Console verification, GA4/GTM/Meta Pixel without code), Settings (phone/WhatsApp everywhere, map embed paste, fuel policies, password change), Database backup/export |
 
-Admin default password: `roam2024` — **change it from Admin → Settings on day one.**
+First login: the starter password `roam2024` works **once** — the portal
+then forces you to set your own private password before it opens.
 
 ## Deploy to Vercel (10 minutes)
 
@@ -66,7 +99,10 @@ Admin default password: `roam2024` — **change it from Admin → Settings on da
    | Name | Value |
    | --- | --- |
    | `DATABASE_URL` | your Neon pooled connection string |
-   | `ADMIN_SECRET` | any long random string (recommended) |
+
+   `ADMIN_SECRET` and `ADMIN_SETUP_KEY` are optional — see `.env.example`.
+   Most owners need neither: the session secret is auto-generated and the
+   site provisions itself.
 
 4. Click **Deploy** and wait ~2 minutes.
 
@@ -99,7 +135,8 @@ npx prisma db push --schema prisma/schema.sqlite.prisma
 
 Both are equivalent to what the site now does automatically:
 
-- **One-click:** visit `https://your-site.vercel.app/api/setup?key=roam2024`
+- ~~One-click URL~~ — removed for security. Provisioning is automatic;
+  for a manual escape hatch set `ADMIN_SETUP_KEY` and POST to `/api/setup`.
 - **SQL editor:** paste `prisma/setup.sql` into the Neon SQL console and run.
 
 ## Changing data — everything is in the admin portal
@@ -116,6 +153,6 @@ Both are equivalent to what the site now does automatically:
 | Symptom | Cause & fix |
 | --- | --- |
 | Fleet shows built-in starter vehicles, admin warns "database unreachable" | `DATABASE_URL` missing/wrong in Vercel → re-check the value, redeploy. The site still shows cars + rates in the meantime. |
-| Admin login says wrong password | Default is `roam2024`. On a brand-new database the password seeds itself on the first visit — reload `/admin` once, then log in. |
+| Admin login says wrong password | On a brand-new database the starter password seeds itself on the first visit — reload `/admin` once, then log in with `roam2024` and set your own password when asked. Locked out after failed tries? Wait ~15 minutes (brute-force protection) and try again. |
 | Data disappeared after a redeploy | You are on SQLite, not Postgres → set `DATABASE_URL` to Neon (step 3). SQLite files don't persist on Vercel. |
 | Want to reset to the starter data | Delete rows in Admin, or truncate tables in the Neon console — the site re-seeds any **empty** table on the next visit. |

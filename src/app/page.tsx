@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { RoamSaathiApp } from "@/components/site/RoamSaathiApp";
 import { db } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/dbReady";
+import { stripSecretSettings } from "@/lib/auth";
 import { defaultFleetVehicles } from "@/lib/setupData";
 import type {
   VehicleDTO,
@@ -127,8 +128,9 @@ async function loadSiteData(): Promise<{
       }),
     ]);
 
-    const settings: SettingsMap = {};
-    for (const r of settingsRows) settings[r.key] = r.value;
+    const settings = stripSecretSettings(
+      Object.fromEntries(settingsRows.map((r) => [r.key, r.value]))
+    ) as SettingsMap;
 
     // Serialize dates -> strings for the client components
     const vehicles: VehicleDTO[] = vehicleRows.map((v) => ({

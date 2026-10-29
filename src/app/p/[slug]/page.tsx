@@ -16,6 +16,7 @@ import { PageBlocks } from "@/components/site/PageBlocks";
 import { RhinoLogo } from "@/components/brand/RhinoLogo";
 import { getContact } from "@/lib/contact";
 import { getSiteSeo } from "@/lib/seo";
+import { stripSecretSettings } from "@/lib/auth";
 import {
   PAGE_TYPE_LABELS,
   type SettingsMap,
@@ -32,9 +33,11 @@ async function loadSettings(): Promise<SettingsMap> {
   try {
     await ensureDatabaseReady();
     const rows = await db.settings.findMany();
-    const map: SettingsMap = {};
-    for (const r of rows) map[r.key] = r.value;
-    return map;
+    // v6 security: never serialize credentials/session material into the
+    // client payload of a public page.
+    return stripSecretSettings(
+      Object.fromEntries(rows.map((r) => [r.key, r.value]))
+    ) as SettingsMap;
   } catch {
     return {};
   }

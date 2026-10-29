@@ -28,9 +28,10 @@ export const SERVICE_AREAS = [
   "All Northeast India",
 ];
 
-// Soft passcode gate for the admin portal (also stored in DB settings as
-// adminPasscode — the portal checks the DB value first, then this fallback).
-export const ADMIN_PASSCODE = "roam2024";
+// v6 security: no passcode constants here anymore. siteConfig is imported
+// by client components, so ANY secret placed in this file ships in the
+// public JavaScript bundle. Admin credentials live only in the database
+// (salted scrypt hash) and are handled server-side by src/lib/auth.ts.
 
 // LGBI Airport coordinates (Borjhar, Guwahati)
 export const GEO_LAT = 26.1061;

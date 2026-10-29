@@ -43,29 +43,35 @@ of the steps are identical.
 > For Neon, appending `&pgbouncer=true&connection_limit=1` to the URL is recommended
 > for serverless performance.
 
-### Step 3 — Provision the database (one click)
+### Step 3 — Provision the database (automatic — nothing to visit)
 
-Visit this URL **once** in any browser (replace with your real domain):
+**You no longer need to visit any setup URL.** The site provisions itself:
+the first time anyone opens your website after the redeploy, it creates the
+tables (Vehicle / Booking / Settings / Page / Hotel) and loads the 17-vehicle
+starter rate card, default settings and starter pages — automatically and
+only-when-empty, so your real data is never overwritten.
 
-```
-https://your-site.vercel.app/api/setup?key=roam2024
-```
+Just open your site once and continue to Step 4.
 
-It creates the three tables (Vehicle / Booking / Settings) and loads the 17-vehicle
-starter rate card + default settings. You will see a JSON message starting with
-`"ok": true`.
+- **Alternative without opening the site:** open Neon → **SQL Editor** →
+  paste the whole `prisma/setup.sql` file (included in the project) →
+  **Run**. Same result.
+- **Manual provisioning (rarely needed):** set an `ADMIN_SETUP_KEY`
+  environment variable in Vercel (20+ random characters — never reuse your
+  admin password), redeploy, then POST to `/api/setup` with header
+  `x-setup-key: <your key>`. While the variable is unset the endpoint is
+  completely disabled and answers 404 — the old `?key=roam2024` shortcut is
+  gone for good.
 
-- It is **safe to re-run** — it never overwrites your real data.
-- Changed the admin passcode? Use that passcode in the URL, or set an
-  `ADMIN_SETUP_KEY` environment variable in Vercel.
-- **Alternative without the URL:** open Neon → **SQL Editor** → paste the whole
-  `prisma/setup.sql` file (included in the project) → **Run**. Same result.
-
-### Step 4 — Verify
+### Step 4 — Verify & secure
 
 1. Open your site → the **Fleet** section should show 17 vehicles with prices.
-2. Switch to **Admin** (passcode `roam2024`) → **Fleet** → edit a rate → save.
-3. Reload the page — the new rate is still there. **Saving now works permanently.** 🎉
+2. Go to **/admin** (sign in with the starter password `roam2024`) → the
+   portal will immediately ask you to **set your own password**. Choose 8+
+   characters you don't use anywhere else — the portal unlocks the moment
+   you save it.
+3. **Fleet** → edit a rate → save → reload. The new rate is still there.
+   **Saving now works permanently.** 🎉
 
 ---
 

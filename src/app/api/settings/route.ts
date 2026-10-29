@@ -1,27 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/dbReady";
-import { isAdmin } from "@/lib/auth";
+import { requireAdmin, SECRET_SETTINGS_KEYS } from "@/lib/auth";
 import { sanitizeMapEmbed } from "@/lib/siteConfig";
 
 export const dynamic = "force-dynamic";
-
-/** Settings keys that must never leave the server. */
-const SECRET_KEYS = new Set(["adminPasswordHash", "adminPasswordSalt"]);
-
 /**
  * GET /api/settings — admin only. Returns all settings as a key-value map
- * with secret keys (password hash/salt) stripped out.
+ * with every secret key (credentials, session material, lockout counters)
+ * stripped out — see SECRET_SETTINGS_KEYS in src/lib/auth.ts.
  */
 export async function GET(req: NextRequest) {
-  if (!isAdmin(req)) {
+  if (!(await requireAdmin(req))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
   await ensureDatabaseReady();
   const rows = await db.settings.findMany();
   const map: Record<string, string> = {};
   for (const r of rows) {
-    if (!SECRET_KEYS.has(r.key)) map[r.key] = r.value;
+    if (!SECRET_SETTINGS_KEYS.includes(r.key as never)) map[r.key] = r.value;
   }
   return NextResponse.json({ settings: map });
 }
@@ -33,7 +30,7 @@ export async function GET(req: NextRequest) {
  */
 export async function PUT(req: NextRequest) {
   try {
-    if (!isAdmin(req)) {
+    if (!(await requireAdmin(req))) {
       return NextResponse.json({ error: "Not authorized" }, { status: 401 });
     }
     await ensureDatabaseReady();
@@ -50,11 +47,16 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "No updates provided" }, { status: 400 });
     }
 
-    // Block direct writes to credential material — use /api/admin/password.
+    // Block direct writes to credential / security material — use the
+    // password change form, and let the server manage session + lockout keys.
     for (const k of Object.keys(updates)) {
-      if (SECRET_KEYS.has(k) || k === "adminPasscode") {
+      if (
+        SECRET_SETTINGS_KEYS.includes(k as never) ||
+        k === "adminPasscode" ||
+        k === "loginFailCountAt"
+      ) {
         return NextResponse.json(
-          { error: `Use the password change form for "${k}".` },
+          { error: `"${k}" is managed automatically and cannot be edited here.` },
           { status: 400 }
         );
       }
@@ -90,7 +92,7 @@ export async function PUT(req: NextRequest) {
     const rows = await db.settings.findMany();
     const map: Record<string, string> = {};
     for (const r of rows) {
-      if (!SECRET_KEYS.has(r.key)) map[r.key] = r.value;
+      if (!SECRET_SETTINGS_KEYS.includes(r.key as never)) map[r.key] = r.value;
     }
     return NextResponse.json({ ok: true, settings: map });
   } catch (e) {

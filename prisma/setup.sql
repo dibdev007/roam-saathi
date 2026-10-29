@@ -202,7 +202,9 @@ ON CONFLICT ("id") DO NOTHING;
 
 -- ============================================================
 -- Default settings: contacts, fuel policy, destinations, map,
--- announcement + the default admin password (roam2024, hashed).
+-- announcement + the default admin password (salted scrypt hash only —
+-- the plaintext passcode is never stored; session/lockout keys self-create
+-- on first request).
 -- ============================================================
 
 INSERT INTO "Settings" ("id","key","value")
@@ -223,10 +225,6 @@ ON CONFLICT ("id") DO NOTHING;
 
 INSERT INTO "Settings" ("id","key","value")
 VALUES ('set-address', 'address', 'Near Lokpriya Gopinath Bordoloi International Airport, Borjhar, Guwahati, Assam 781015')
-ON CONFLICT ("id") DO NOTHING;
-
-INSERT INTO "Settings" ("id","key","value")
-VALUES ('set-adminpasscode', 'adminPasscode', 'roam2024')
 ON CONFLICT ("id") DO NOTHING;
 
 INSERT INTO "Settings" ("id","key","value")
@@ -302,10 +300,6 @@ ON CONFLICT ("key") DO NOTHING;
 
 INSERT INTO "Settings" ("id","key","value")
 VALUES ('set2-address', 'address', 'Near Lokpriya Gopinath Bordoloi International Airport, Borjhar, Guwahati, Assam 781015')
-ON CONFLICT ("key") DO NOTHING;
-
-INSERT INTO "Settings" ("id","key","value")
-VALUES ('set2-adminpasscode', 'adminPasscode', 'roam2024')
 ON CONFLICT ("key") DO NOTHING;
 
 INSERT INTO "Settings" ("id","key","value")
@@ -415,4 +409,5 @@ ON CONFLICT ("id") DO NOTHING;
 
 
 -- Done! Open your site — the fleet section now shows 17 vehicles,
--- /stays shows 5 partner stays, and Admin (/admin, roam2024) is ready.
+-- /stays shows 5 partner stays, and Admin (/admin) is ready — sign in with
+-- the starter password and the portal will ask you to set your own.

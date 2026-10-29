@@ -102,19 +102,18 @@ export function DatabaseTab({ vehicles, bookings, settings }: Props) {
               that value → <strong>Redeploy</strong>.
             </li>
             <li>
-              Visit <strong>your-site.vercel.app/api/setup?key=roam2024</strong> once — it creates
-              the tables and loads the 17-vehicle starter fleet automatically.
-            </li>
-            <li>
-              Done. Your fleet, rates and bookings now live in the cloud — permanent, shared across
-              every device, and safe across redeploys.
+              Open your site once — it creates its tables and loads the starter
+              fleet, rates and pages automatically. Nothing to visit or
+              configure, and real owner data is never overwritten. Done: your
+              fleet, rates and bookings now live in the cloud — permanent,
+              shared across every device, and safe across redeploys.
             </li>
           </ol>
           <p className="flex items-start gap-2 rounded-lg border border-forest/20 bg-cream/70 p-3 text-xs text-forest/85">
             <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
             Prefer SQL? Paste <strong>prisma/setup.sql</strong> (included in the project) into the
-            Neon SQL Editor instead of visiting the setup URL — same result. Full click-by-click
-            guide: <strong>DATABASE_SETUP.md</strong> and the deployment PDF.
+            Neon SQL Editor instead — same result. Full click-by-click guide:{" "}
+            <strong>DATABASE_SETUP.md</strong> and the deployment PDF.
           </p>
         </CardContent>
       </Card>

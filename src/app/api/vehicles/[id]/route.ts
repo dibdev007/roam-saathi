@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { isAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ const numOrNull = (v: unknown): number | null => {
 
 /** PATCH /api/vehicles/[id] — update any vehicle field. Admin only. */
 export async function PATCH(req: NextRequest, { params }: Ctx) {
-  if (!isAdmin(req)) {
+  if (!(await requireAdmin(req))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
   try {
@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 
 /** DELETE /api/vehicles/[id] — remove a vehicle. Admin only. */
 export async function DELETE(req: NextRequest, { params }: Ctx) {
-  if (!isAdmin(req)) {
+  if (!(await requireAdmin(req))) {
     return NextResponse.json({ error: "Not authorized" }, { status: 401 });
   }
   try {

@@ -1,48 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { provisionDatabase, ensureV3Defaults } from "@/lib/setupData";
+import { safeEqual } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 /**
- * ONE-TIME database provisioning + upgrade endpoint.
+ * OPTIONAL manual provisioning endpoint (v6 security rewrite).
  *
- * Visit once after deploying to a fresh cloud database (or after updating
- * to v3 on an existing one):
- *   https://your-site.vercel.app/api/setup?key=roam2024
+ * The site no longer NEEDS this endpoint: databases provision themselves
+ * automatically on the first visit (see src/lib/dbReady.ts). It only exists
+ * as a manual escape hatch for owners switching to a fresh cloud database.
  *
- * What it does:
- *   1. Creates the Vehicle / Booking / Settings / Page tables (if missing).
- *   2. Upgrades older databases — adds the v3 columns when missing.
- *   3. Loads the 17-vehicle starter rate card, default settings and the
- *      starter content pages — only when tables are empty, so real data
- *      is never overwritten. Missing v3 settings keys are added.
+ * SECURITY MODEL
+ *   - DISABLED (returns 404) unless the ADMIN_SETUP_KEY environment variable
+ *     is set in the hosting dashboard. There is NO default key — the old
+ *     "key=roam2024" behaviour is gone for good.
+ *   - POST-only (a plain URL visit can never trigger anything).
+ *   - Timing-safe key comparison, generic errors, no server detail leakage.
  *
- * Protected by the admin passcode (?key=...). Change it any time from
- * Admin → Settings afterwards, or set ADMIN_SETUP_KEY in the environment.
+ * To use it: set ADMIN_SETUP_KEY (20+ random characters) in Vercel →
+ * Settings → Environment Variables, redeploy, then POST to /api/setup with
+ * header "x-setup-key: <your key>". Delete the variable afterwards to
+ * disable the endpoint again.
  */
+
+/* Small per-instance throttle — provisioning is heavy, keep it rare. */
+let lastAttempt = 0;
+const MIN_INTERVAL_MS = 3000;
+
 async function handleSetup(req: NextRequest) {
-  const url = new URL(req.url);
-  let key = url.searchParams.get("key") ?? "";
-  if (req.method === "POST" && !key) {
-    try {
-      const body = await req.json();
-      key = typeof body?.key === "string" ? body.key : "";
-    } catch {
-      /* ignore malformed body */
-    }
+  const expected = process.env.ADMIN_SETUP_KEY || "";
+  if (!expected) {
+    // Endpoint intentionally disabled — do not even confirm it exists.
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const expected = process.env.ADMIN_SETUP_KEY || "roam2024";
-  if (key !== expected) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error:
-          "Invalid or missing key. Add ?key=<your admin passcode> to the URL (default: roam2024).",
-      },
-      { status: 403 }
-    );
+  if (req.method !== "POST") {
+    return NextResponse.json({ error: "Use POST" }, { status: 405 });
+  }
+
+  const now = Date.now();
+  if (now - lastAttempt < MIN_INTERVAL_MS) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+  lastAttempt = now;
+
+  const provided =
+    req.headers.get("x-setup-key") ||
+    new URL(req.url).searchParams.get("key") ||
+    "";
+  if (!provided || !safeEqual(provided, expected)) {
+    return NextResponse.json({ error: "Invalid key" }, { status: 403 });
   }
 
   try {
@@ -58,34 +67,31 @@ async function handleSetup(req: NextRequest) {
       ...result,
       upgrade: upgraded,
       nextSteps: [
-        "Open your site home page — the fleet section shows your vehicles with the new Fuel & Toll column.",
-        "Open /admin (passcode roam2024) → Settings → replace the placeholder phone/WhatsApp numbers with your real numbers.",
+        "Open your site home page — the fleet section shows your vehicles with rates.",
+        "Open /admin and sign in, then set your own password when prompted.",
+        "Admin → Settings → replace the placeholder phone/WhatsApp numbers with your real numbers.",
         "Admin → Pages → edit the starter Rules & Policies page and publish your own blogs and travel diaries.",
-        "Admin → Fleet → set or correct each vehicle's mileage (kmpl) to make the booking fuel estimator accurate.",
       ],
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    // Log the full error server-side; return ONLY a generic message so the
+    // response can never leak DATABASE_URL fragments or schema details.
+    console.error("[POST /api/setup] provisioning failed:", e);
     return NextResponse.json(
       {
         ok: false,
-        error: "Provisioning failed.",
-        detail: msg,
-        hints: [
-          "Check that DATABASE_URL points to your cloud Postgres (Neon / Supabase / Prisma Postgres) and ends with ?sslmode=require for Neon.",
-          "If your provider blocks raw SQL, create the tables with: npx prisma db push",
-          "Make sure the tables were not created with a different schema earlier.",
-        ],
+        error:
+          "Provisioning failed. Check the server logs — usually DATABASE_URL is wrong or unreachable.",
       },
       { status: 500 }
     );
   }
 }
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   return handleSetup(req);
 }
 
-export async function POST(req: NextRequest) {
-  return handleSetup(req);
+export async function GET() {
+  return NextResponse.json({ error: "Not found" }, { status: 404 });
 }

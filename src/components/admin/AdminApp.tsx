@@ -7,6 +7,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Car,
@@ -18,9 +19,13 @@ import {
   Database,
   LogOut,
   ExternalLink,
+  ShieldAlert,
+  Lock,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
@@ -64,7 +69,12 @@ const TAB_META: { key: TabKey; label: string; icon: React.ElementType }[] = [
   { key: "database", label: "Database", icon: Database },
 ];
 
-export function AdminApp() {
+export function AdminApp({
+  mustChangePassword: mustChangeProp = false,
+}: {
+  mustChangePassword?: boolean;
+} = {}) {
+  const router = useRouter();
   const [tab, setTab] = React.useState<TabKey>("dashboard");
 
   const [vehicles, setVehicles] = React.useState<VehicleDTO[]>([]);
@@ -73,6 +83,11 @@ export function AdminApp() {
   const [pages, setPages] = React.useState<PageDTO[]>([]);
   const [hotels, setHotels] = React.useState<HotelDTO[]>([]);
   const [loading, setLoading] = React.useState(true);
+
+  // v6 security — the portal stays locked until the publicly-known starter
+  // password has been replaced with the owner's own password. The flag is
+  // passed in from the server-rendered /admin page.
+  const mustChangePassword = mustChangeProp;
 
   const refresh = React.useCallback(async () => {
     setLoading(true);
@@ -121,7 +136,24 @@ export function AdminApp() {
     } catch {
       /* ignore */
     }
+    try {
+      sessionStorage.removeItem("rs_temp_pw");
+    } catch {
+      /* ignore */
+    }
     window.location.href = "/";
+  }
+
+  if (mustChangePassword) {
+    return (
+      <ForcedPasswordChange
+        onDone={() => {
+          // The password API cleared the flag server-side; re-render the
+          // server component so the gate unmounts and the portal opens.
+          router.refresh();
+        }}
+      />
+    );
   }
 
   return (
@@ -237,6 +269,126 @@ export function AdminApp() {
       <footer className="mt-auto border-t border-cream/15 bg-forest py-4 text-center text-xs text-cream/70">
         {BUSINESS_NAME} Control Room · Everything you save here is live on the website instantly
       </footer>
+    </div>
+  );
+}
+
+/**
+ * Blocking first-login screen: the starter password is publicly known
+ * (it appears in old setup guides), so the portal refuses to open until
+ * the owner sets their own private password.
+ */
+function ForcedPasswordChange({ onDone }: { onDone: () => void }) {
+  const [current, setCurrent] = React.useState("");
+  const [next, setNext] = React.useState("");
+  const [confirm, setConfirm] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    // Prefill the password verified moments ago at login (this tab only).
+    try {
+      const t = sessionStorage.getItem("rs_temp_pw");
+      if (t) setCurrent(t);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (next.length < 8) {
+      toast.error("Use at least 8 characters.");
+      return;
+    }
+    if (next !== confirm) {
+      toast.error("The two new passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+      });
+      const j = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(j?.error ?? "Could not set the password");
+        return;
+      }
+      try {
+        sessionStorage.removeItem("rs_temp_pw");
+      } catch {
+        /* ignore */
+      }
+      toast.success("Password set — welcome to your secure portal!");
+      onDone();
+    } catch {
+      toast.error("Could not reach the server.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-forest px-4">
+      <div aria-hidden className="pointer-events-none absolute -top-32 -left-24 h-96 w-96 rounded-full bg-[#16A34A]/25 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -bottom-40 -right-24 h-[28rem] w-[28rem] rounded-full bg-saffron/15 blur-3xl" />
+
+      <Card className="relative w-full max-w-md border-white/10 bg-white/95 shadow-2xl backdrop-blur">
+        <CardContent className="flex flex-col gap-4 p-8">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-saffron/15 text-saffron">
+              <ShieldAlert className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="font-display text-lg font-bold text-forest">Set your own password</h1>
+              <p className="text-sm text-muted-foreground">
+                The starter password is public — the portal stays locked until you replace it.
+              </p>
+            </div>
+          </div>
+          <form onSubmit={submit} className="flex flex-col gap-3">
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="password"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                placeholder="Current (starter) password"
+                aria-label="Current password"
+                className="pl-9"
+                required
+              />
+            </div>
+            <Input
+              type="password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              placeholder="New password — 8+ characters"
+              aria-label="New password"
+              minLength={8}
+              required
+            />
+            <Input
+              type="password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              placeholder="Repeat the new password"
+              aria-label="Confirm new password"
+              minLength={8}
+              required
+            />
+            <Button type="submit" disabled={busy} className="bg-forest text-cream hover:bg-forest/90">
+              {busy ? "Saving…" : "Save password & open portal"}
+            </Button>
+          </form>
+          <p className="text-xs text-muted-foreground">
+            Tip: mix letters, numbers and a symbol — e.g. <em>Guwahati#Rhino7</em>. You only do
+            this once; after this the portal opens straight away.
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

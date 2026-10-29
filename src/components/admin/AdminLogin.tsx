@@ -32,6 +32,15 @@ export function AdminLogin() {
         toast.error(j?.error ?? "Login failed");
         return;
       }
+      // Keep the just-verified password ONLY in this tab's sessionStorage so
+      // the forced "set your own password" screen can prefill the current
+      // password field. Cleared immediately after the change; never stored
+      // server-side or in cookies.
+      try {
+        sessionStorage.setItem("rs_temp_pw", password);
+      } catch {
+        /* private mode */
+      }
       toast.success("Welcome back!");
       router.refresh();
     } catch {
