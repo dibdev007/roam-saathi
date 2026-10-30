@@ -43,35 +43,27 @@ of the steps are identical.
 > For Neon, appending `&pgbouncer=true&connection_limit=1` to the URL is recommended
 > for serverless performance.
 
-### Step 3 — Provision the database (automatic — nothing to visit)
+### Step 3 — Let the database fill itself (nothing to do!)
 
-**You no longer need to visit any setup URL.** The site provisions itself:
-the first time anyone opens your website after the redeploy, it creates the
-tables (Vehicle / Booking / Settings / Page / Hotel) and loads the 17-vehicle
-starter rate card, default settings and starter pages — automatically and
-only-when-empty, so your real data is never overwritten.
+The v6 site **provisions and seeds itself**: open your live site once and it
+creates any missing tables (Vehicle / Booking / Settings / Page / Hotel /
+Customer / Agreement) and loads the starter fleet, stays, pages and settings
+— **only if a table is empty**, so redeploys never wipe your real data.
 
-Just open your site once and continue to Step 4.
+- **Repair manually if ever needed:** log in at `/admin` → **Database** tab →
+  **Repair / re-provision database**. No key in any URL — the old
+  `/api/setup?key=roam2024` shortcut was removed in v6 for security.
+- Key-based access still exists if you set the `ADMIN_SETUP_KEY` environment
+  variable in Vercel (then `https://your-site.vercel.app/api/setup?key=YOUR-KEY`).
+- **Alternative without logging in:** open Neon → **SQL Editor** → paste the
+  whole `prisma/setup.sql` file (included in the project) → **Run**. Same result.
 
-- **Alternative without opening the site:** open Neon → **SQL Editor** →
-  paste the whole `prisma/setup.sql` file (included in the project) →
-  **Run**. Same result.
-- **Manual provisioning (rarely needed):** set an `ADMIN_SETUP_KEY`
-  environment variable in Vercel (20+ random characters — never reuse your
-  admin password), redeploy, then POST to `/api/setup` with header
-  `x-setup-key: <your key>`. While the variable is unset the endpoint is
-  completely disabled and answers 404 — the old `?key=roam2024` shortcut is
-  gone for good.
-
-### Step 4 — Verify & secure
+### Step 4 — Verify
 
 1. Open your site → the **Fleet** section should show 17 vehicles with prices.
-2. Go to **/admin** (sign in with the starter password `roam2024`) → the
-   portal will immediately ask you to **set your own password**. Choose 8+
-   characters you don't use anywhere else — the portal unlocks the moment
-   you save it.
-3. **Fleet** → edit a rate → save → reload. The new rate is still there.
-   **Saving now works permanently.** 🎉
+2. Go to `/admin` (default password `roam2024` — change it in Admin → Settings)
+   → **Fleet** → edit a rate → save.
+3. Reload the page — the new rate is still there. **Saving now works permanently.** 🎉
 
 ---
 

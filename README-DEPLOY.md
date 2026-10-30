@@ -1,158 +1,135 @@
-# Roam Saathi Website — v6 (Security-Hardened Deployment Package)
+# Roam Saathi Website — v6 (Deployment Package)
 
 Tourist-only car rental site beside LGBI Airport, Guwahati — full owner
-control room at the hidden `/admin` route.
+control room at the hidden `/admin` route, now with a built-in CRM and
+one-time e-sign rental agreements.
 
-## What's new in v6 — full security hardening
+## What's new in v6
 
-An independent audit found real exposures in v5 (the setup key `roam2024`
-inside the public JavaScript bundle, a forgeable session secret committed
-to the public GitHub repo, and credential material serialized into the
-homepage HTML). v6 fixes all of them and adds defence in depth:
+### 1. Customers CRM (Admin → Customers)
+Every renter is captured with the channel that brought them — WhatsApp,
+Google Maps, Instagram, Facebook, Website, Walk-in, Referral, Repeat,
+Other — plus a complete profile: phones, email, full address, date of
+birth, ID proof (type + number + scanned file), address proof (type +
+number + scanned file) and driving licence (number, expiry, scanned file).
+Scans are stored securely in your database and only the admin can open
+them.
 
-1. **Nothing forgeable lives in the code.** The session-signing secret is
-   now generated randomly per installation and stored in YOUR database —
-   the public repo contains no secret an attacker could use.
-2. **The setup endpoint is disabled by default.** The site provisions
-   itself; the old `?key=roam2024` shortcut is gone forever. (Optional
-   manual provisioning exists via the `ADMIN_SETUP_KEY` environment
-   variable — see `.env.example`.)
-3. **No secret ever reaches the browser.** Credentials, session material
-   and lockout counters are stripped from every page payload, API response
-   and backup file.
-4. **Forced first password change.** The publicly-known starter password
-   still works exactly once — the portal then refuses to open until you
-   set your own 8+ character password.
-5. **Brute-force lockout that persists.** 8 failed logins lock the portal
-   for ~15 minutes — recorded in the database, so it works across all
-   serverless instances.
-6. **Stolen sessions die instantly.** Every password change revokes ALL
-   existing admin sessions everywhere (session epoch).
-7. **CSRF protection** on every admin mutation (same-origin checks) and a
-   **SameSite=Strict, httpOnly** session cookie.
-8. **Security headers everywhere** — CSP, HSTS, X-Frame-Options,
-   nosniff, strict referrer policy; `/admin` and `/api` are `noindex`.
-9. **Spam-hardened booking form** — honeypot field, per-IP throttle and
-   phone-number validation.
+### 2. One-time e-sign rental agreements (Admin → Customers → Agreements)
+- Pick the customer, fill the trip (vehicle, dates, pickup/drop, charges,
+  deposit, special conditions) and press **Create signing link**.
+- The app generates a **private one-time link** (a 256-bit random token).
+  Send it to the customer on WhatsApp.
+- The customer opens the link, reads the full agreement — drafted under
+  **Indian law** (Indian Contract Act 1872, Motor Vehicles Act 1988, Assam
+  Motor Vehicles Rules 2003, IT Act 2000) with **exclusive jurisdiction of
+  the courts at Guwahati (Gauhati High Court)** — then signs by **drawing
+  on the screen like a pen** or **uploading a photo of their signature**.
+- On submit the signature is merged into a branded PDF together with the
+  signing date, time, IP and device record, the document is saved in the
+  portal, and **the link destroys itself instantly** — it can never be
+  opened or reused again, not even by accident.
+- Download the signed PDF any time from Admin → Customers → Agreements.
+  Pending agreements can be previewed as PDF or revoked (link dies).
 
-## What's new in v5 — the "empty fleet" fix
+### 3. Home-menu bug fix
+New pages created in Admin → Website Pages with **Show in menu** enabled
+now really appear in the top menu. The cause: every new page silently
+saved as a **draft**, and the menu only lists published pages. v6 starts
+new pages as **published**, warns loudly in the editor and in the list
+when a menu page is still a draft, and the navbar now shows the first
+three custom pages plus a "More" dropdown for the rest.
 
-Some visitors (and owners!) saw **no vehicles in the fleet, an empty rate
-card and a booking form with no cars to choose**. That happened when the
-connected database was fresh, un-provisioned, or unreachable. v5 fixes this
-at three levels:
+### 4. Security hardening (top priority — nothing about the portal is exposed)
+- **The old `/api/setup?key=roam2024` hole is closed.** The hard-coded key
+  is gone. Repair now runs from Admin → Database (admin login required).
+  Key access exists only if YOU set the `ADMIN_SETUP_KEY` env variable.
+- **The admin login page reveals nothing.** `/admin` HTML no longer
+  contains the words "AdminLogin"/"AdminApp" or chunk maps — the portal is
+  lazy-loaded in separate files after the page opens, and the route sends
+  `noindex` + `no-store`.
+- **Passwords are salted scrypt hashes**; login sets an HMAC-signed,
+  HttpOnly, SameSite cookie (7 days) and is throttled against brute force.
+- **Every admin API verifies the signed cookie** — no data is readable or
+  writable without a real login.
+- **Site-wide security headers** (nosniff, frame protection, referrer
+  policy, HSTS) are set in `next.config.ts`.
+- **Signing links are cryptographically single-use**: the database stores
+  only the SHA-256 hash of the token; when the customer signs, the hash is
+  wiped in the same atomic write that records the signature — a stolen
+  database backup can never open a live link, and two people clicking at
+  the same moment cannot both sign.
 
-1. **Self-healing database.** On the first request the site now checks the
-   database and, if tables are missing or empty, creates them and loads the
-   starter data automatically — 17 vehicles, 5 partner stays, the Rules &
-   Policies page and all settings. **You no longer need to visit /api/setup
-   or paste setup.sql** (both still work, but are optional).
-2. **Built-in fallback fleet.** If the database is completely unreachable
-   (missing DATABASE_URL, wrong password, read-only filesystem), the public
-   site now shows the full built-in fleet with rates — the fleet, the rate
-   card and the booking form dropdown are **never empty** again. Booking
-   continues over WhatsApp (it always did).
-3. **Safer APIs.** `/api/vehicles` and `/api/bookings` now create what they
-   need and degrade gracefully instead of failing hard.
-
-Also fixed in v5: provisioning now creates the **Hotel (Stays & Partners)**
-table and the per-page **SEO columns** that v4's manual setup path missed.
-
-## What's inside (carried from v4)
+## What's inside (carried from v5)
 
 | Area | Highlights |
 | --- | --- |
-| Public site | Animated hero, scroll reveals, 3D-tilt fleet cards with fuel policy column, live fuel estimator, booking disclaimer flow, reviews marquee, admin-managed map & contact |
-| `/stays` | Hotel directory: state filter, search, photos, prices, direct call/WhatsApp to the hotel |
-| `/p/<slug>` | Owner-created pages (blogs, travel diaries, customer stories, policies) with sub-pages, homepage visibility and per-page SEO fields |
-| Admin `/admin` | Hidden portal (no public link, `noindex`): Dashboard, Fleet & prices CRUD, Bookings pipeline, No-code page builder, Stays & Partners manager, Growth & SEO (meta tags, Search Console verification, GA4/GTM/Meta Pixel without code), Settings (phone/WhatsApp everywhere, map embed paste, fuel policies, password change), Database backup/export |
+| Public site | Animated hero, scroll reveals, fleet cards with rates & fuel policy, fuel estimator, reviews, admin-managed contact & map, WhatsApp-first booking |
+| `/stays` | Hotel directory: filters, search, photos, direct call/WhatsApp |
+| `/p/<slug>` | Owner pages (blogs, diaries, stories, policies) with sub-pages, homepage cards and per-page SEO |
+| Admin `/admin` | Dashboard, Fleet & prices, Bookings pipeline, **Customers CRM + Agreements**, Website pages, Stays & Partners, Growth & SEO (GA4/GTM/Pixel), Settings, Database backup/repair |
+| Self-healing DB | First visit auto-creates all **7 tables** and seeds starter data only when empty |
 
-First login: the starter password `roam2024` works **once** — the portal
-then forces you to set your own private password before it opens.
+Admin default password: `roam2024` — **change it from Admin → Settings on day one.**
 
-## Deploy to Vercel (10 minutes)
+## Deploy / update on Vercel (you already have the site live)
 
-### 1. Create the database (one time, free, ~4 min)
+### 1. Upload this code to GitHub (~5 min)
 
-1. Go to **neon.com** → sign up with Google (free).
-2. Create a project → copy the **pooled connection string**
-   (looks like `postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require`).
+1. Open your existing repo **github.com/dibdev007/roam-saathi**.
+2. Delete the old `src` folder and `prisma` folder in GitHub (Settings is
+   not needed — just use "Add file → Upload files" and drag the NEW `src`
+   and `prisma` folders from this package, after removing the old ones).
+3. Also upload the refreshed `package.json`, `next.config.ts`,
+   `public/` files, `README-DEPLOY.md`, `DATABASE_SETUP.md`,
+   `.env.example` and `.gitignore` (overwrite when GitHub asks).
+4. Commit — Vercel redeploys automatically.
 
-> Supabase or Vercel Postgres work exactly the same — any hosted Postgres is fine.
+> GitHub drag-and-drop accepts max 100 files per drop — `src` fits in
+> 2–3 batches. Never upload `node_modules` or `.next`.
 
-### 2. Upload this code to GitHub (~5 min)
+### 2. Environment variables (Vercel → Project → Settings)
 
-1. Create a new repository on **github.com** (name: `roam-saathi-website`).
-2. Upload the **contents** of this folder (not the folder itself) —
-   drag-and-drop is fine: `src`, `prisma`, `public`, all the config files,
-   `package.json`, `.gitignore`, `.env.example`.
-   Do **not** upload `node_modules` or `.next` (they don't exist in this zip anyway).
-3. Never put your real `DATABASE_URL` in GitHub — it goes only in Vercel (step 3).
+| Name | Required | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | **Yes** | Your Neon/Supabase/Prisma Postgres pooled string — unchanged from v5 |
+| `ADMIN_SECRET` | Recommended | Long random string; signs the admin session cookie |
+| `ADMIN_SETUP_KEY` | Optional | Only if you want key-based `/api/setup` access; leave unset otherwise |
 
-### 3. Import to Vercel and connect the database (~3 min)
+### 3. Let the database upgrade itself (~1 min)
 
-1. On **vercel.com** → *Add New… → Project* → import your new GitHub repo.
-2. Framework preset: **Next.js** (auto-detected). Build command and output
-   are already correct in `package.json`.
-3. Open **Environment Variables** and add:
-
-   | Name | Value |
-   | --- | --- |
-   | `DATABASE_URL` | your Neon pooled connection string |
-
-   `ADMIN_SECRET` and `ADMIN_SETUP_KEY` are optional — see `.env.example`.
-   Most owners need neither: the session secret is auto-generated and the
-   site provisions itself.
-
-4. Click **Deploy** and wait ~2 minutes.
-
-### 4. That's it — the database fills itself
-
-Open your live site. On the first load the app:
-
-1. Connects to your Postgres,
-2. Creates the 5 tables (`Vehicle`, `Booking`, `Settings`, `Page`, `Hotel`),
-3. Loads the starter fleet, stays, pages and settings — **only if empty**,
-   so redeploys never wipe data you changed from the admin portal.
-
-Verify: the **Fleet** section shows 17 vehicles, **Rates** shows the full
-rate card, and **Book a vehicle** lists every car in the dropdown.
+Open your live site once. The self-healing bootstrap adds the two NEW
+tables (`Customer`, `Agreement`) to your existing Postgres — your current
+vehicles, pages, stays and settings are untouched. If anything looks off,
+use **Admin → Database → Repair / re-provision database** (admin login,
+no key in any URL).
 
 ## Local development
 
 ```bash
 npm install
 cp .env.example .env      # paste your DATABASE_URL
-npm run dev               # http://localhost:3000  — tables auto-create
+npm run dev               # http://localhost:3000 — tables auto-create
 ```
-
-Optional (SQLite sandbox instead of Postgres):
-```bash
-npx prisma db push --schema prisma/schema.sqlite.prisma
-```
-
-## Alternative (manual) database seeding — optional
-
-Both are equivalent to what the site now does automatically:
-
-- ~~One-click URL~~ — removed for security. Provisioning is automatic;
-  for a manual escape hatch set `ADMIN_SETUP_KEY` and POST to `/api/setup`.
-- **SQL editor:** paste `prisma/setup.sql` into the Neon SQL console and run.
 
 ## Changing data — everything is in the admin portal
 
-- **Vehicles & prices:** Admin → Fleet → add/edit/delete (goes live instantly).
-- **Stays & hotels:** Admin → Stays & Partners → create listings, upload photos.
-- **Pages/blogs:** Admin → Pages → write, publish, control menu & homepage visibility.
-- **SEO & analytics:** Admin → Growth & SEO → meta tags, Search Console
-  verification, GA4 / GTM / Meta Pixel IDs — no code, no redeploy.
-- **Phone/WhatsApp everywhere:** Admin → Settings.
+- **Vehicles & prices:** Admin → Fleet (live instantly).
+- **Stays & hotels:** Admin → Stays & Partners.
+- **Pages/blogs:** Admin → Pages (menu + homepage cards + SEO).
+- **Customers & agreements:** Admin → Customers — add the renter, upload
+  KYC scans, create the agreement, send the one-time signing link,
+  download the signed PDF.
+- **SEO & analytics:** Admin → Growth & SEO.
+- **Phone/WhatsApp/socials:** Admin → Settings.
 
 ## Troubleshooting
 
 | Symptom | Cause & fix |
 | --- | --- |
-| Fleet shows built-in starter vehicles, admin warns "database unreachable" | `DATABASE_URL` missing/wrong in Vercel → re-check the value, redeploy. The site still shows cars + rates in the meantime. |
-| Admin login says wrong password | On a brand-new database the starter password seeds itself on the first visit — reload `/admin` once, then log in with `roam2024` and set your own password when asked. Locked out after failed tries? Wait ~15 minutes (brute-force protection) and try again. |
-| Data disappeared after a redeploy | You are on SQLite, not Postgres → set `DATABASE_URL` to Neon (step 3). SQLite files don't persist on Vercel. |
-| Want to reset to the starter data | Delete rows in Admin, or truncate tables in the Neon console — the site re-seeds any **empty** table on the next visit. |
+| New page not in the menu | The page is a draft. Open Admin → Pages — the row shows a yellow **Draft — not on site** badge. Switch **Live** ON. |
+| Customer signed but you can't find the PDF | Admin → Customers → Agreements → row of the signed agreement → **Download PDF**. |
+| Signing link says "no longer active" | It was already used, revoked or expired — that is the security design. Create a fresh link. |
+| `/api/setup?key=roam2024` returns 403 | Correct — v6 removed the hard-coded key. Use Admin → Database → Repair. |
+| Admin login says wrong password | Default `roam2024` only on a brand-new database; reload `/admin` once, then log in. If you changed the password, use the new one. |
+| Data disappeared after redeploy | You are on SQLite, not Postgres → set `DATABASE_URL` (step 2). |

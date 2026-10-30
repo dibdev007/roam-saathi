@@ -6,17 +6,18 @@ node_modules/
 out/
 build/
 
-# secrets — NEVER commit these
+# env files (NEVER commit real secrets)
 .env
+.env.local
 .env*.local
 
-# local databases and logs
-*.db
+# local sqlite database
 db/
-dev.log
-server.log/
+*.db
 
 # misc
 .DS_Store
-*.tsbuildinfo
-next-env.d.ts
+*.pem
+npm-debug.log*
+dev.log
+server.log
