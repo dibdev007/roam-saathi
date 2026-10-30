@@ -1,0 +1,197 @@
+// Roam Saathi — Prisma schema (sandbox: SQLite)
+// For production (Neon / Supabase / Prisma Postgres) use prisma/schema.postgres.prisma
+// — the models are identical, only the provider differs. See DATABASE_SETUP.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Vehicle {
+  id                 String   @id @default(cuid())
+  name               String // e.g. "Mahindra Thar 4x4"
+  brand              String? // e.g. "Mahindra"
+  class              String // SUV | HATCHBACK | SEDAN | SCOOTER | BIKE | VAN
+  seats              Int
+  transmission       String   @default("Manual") // Manual | Automatic
+  fuelType           String   @default("Petrol") // Petrol | Diesel | Electric
+
+  // ---- Pricing (all INR, all editable from the admin panel) ----
+  dailyRate          Int // Self-drive price per day
+  withDriverPerDay   Int? // Chauffeur-driven price per day (null = not offered)
+  withDriverAvailable Boolean @default(true)
+  monthlyRate        Int? // Optional long-term monthly rate
+  kmLimitPerDay      Int? // Included km per day (null = unlimited)
+  extraKmRate        Int? // Rs per extra km
+  securityDeposit    Int? // Refundable deposit for self-drive
+  driverBata         Int? // Optional driver charge per day (bata)
+
+  // ---- Fuel & running (v3) ----
+  mileageKmpl        Int? // Approx km per litre — powers the fuel estimator
+  fuelNote           String? // Optional per-vehicle fuel/toll note shown on the card
+
+  // ---- Identity / ops ----
+  registrationNumber String?
+  imageUrl           String?
+  features           String? // Comma-separated: "AC, Bluetooth, Roof rails"
+  description        String   @default("")
+
+  // ---- Display controls ----
+  available          Boolean  @default(true) // Bookable right now
+  popular            Boolean  @default(false) // Show on the homepage fleet section
+  sortOrder          Int      @default(0) // Lower = shown first
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Booking {
+  id             String   @id @default(cuid())
+  name           String
+  phone          String
+  pickupType     String // Airport counter | Hotel delivery | Other
+  pickupLocation String?
+  pickupDate     DateTime
+  returnDate     DateTime
+  vehicleClass   String
+  vehicleName    String? // Specific vehicle once confirmed
+  destination    String? // Where the customer plans to go
+  withDriver     Boolean  @default(false)
+  estimatedTotal Int? // Rough quote in INR
+  message        String?
+  status         String   @default("New") // New | Contacted | Confirmed | Ongoing | Completed | Cancelled
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Settings {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
+
+// ---- v3: No-code page builder (blogs, travel diaries, customer stories,
+//      policies — anything the owner wants to publish without code) ----
+model Page {
+  id             String   @id @default(cuid())
+  title          String
+  slug           String   @unique // /p/<slug>
+  type           String   @default("custom") // blog | travel-diary | customer-story | policy | guide | custom
+  parentId       String? // sub-pages live under a parent page
+  excerpt        String   @default("")
+  coverImage     String?
+  blocks         String   @default("[]") // JSON array of content blocks
+  visibleOnHome  Boolean  @default(false) // show a card in the homepage Stories & Guides section
+  showInMenu     Boolean  @default(false) // list in the website menu / footer
+  published      Boolean  @default(false)
+  sortOrder      Int      @default(0)
+  seoTitle       String? // v4: custom SEO/browser tab title for this page
+  seoDescription String?
+  seoKeywords    String? // v4: comma-separated keywords for this page
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ---- v4: Stays & Partners (hotel directory) --------------------------
+// The owner adds hotels from Admin → Stays & Partners — state, city,
+// phone, starting price, photos and how tourists should book. Built for
+// future collaborations: every field lives in the database, so listings
+// go live instantly without touching code or redeploying.
+model Hotel {
+  id          String   @id @default(cuid())
+  name        String
+  state       String   @default("Assam")
+  city        String
+  area        String? // locality / landmark
+  phone       String // booking phone shown on the card
+  whatsapp    String? // optional direct WhatsApp (digits only)
+  priceFrom   Int? // starting price per night (INR)
+  category    String   @default("Standard") // Budget | Standard | Premium | Resort | Homestay
+  description String   @default("")
+  amenities   String? // comma-separated: "WiFi, Parking, Restaurant"
+  images      String   @default("[]") // JSON array of image URLs / data URLs
+  bookingUrl  String? // optional external booking link
+  mapUrl      String? // optional Google Maps link
+  partner     Boolean  @default(false) // official Roam Saathi collaboration
+  featured    Boolean  @default(false) // show in the homepage Stays preview
+  showOnSite  Boolean  @default(true) // visible in /stays
+  sortOrder   Int      @default(0) // lower = first
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ---- v6: Customers (CRM + KYC) ---------------------------------------
+// Every renter the owner wins — captured with the channel that brought
+// them (WhatsApp, Google Maps, walk-in…) plus the full KYC pack Indian
+// rental businesses must keep on file: photo ID, address proof and a
+// valid driving licence. Documents are stored as data URLs (base64) so
+// the app stays serverless-friendly (no disk writes).
+model Customer {
+  id                 String   @id @default(cuid())
+  fullName           String
+  phone              String
+  altPhone           String?
+  email              String?
+  addressLine        String?
+  city               String?
+  state              String?
+  pincode            String?
+  dob                String? // ISO date string (yyyy-mm-dd)
+  // ---- KYC documents ----
+  idProofType        String? // Aadhaar | Voter ID | Passport | Driving Licence | Other
+  idProofNumber      String?
+  idProofDoc         String? // data URL — scanned ID (image or PDF)
+  addressProofType   String? // Aadhaar | Voter ID | Passport | Utility Bill | Rent Agreement | Other
+  addressProofNumber String?
+  addressProofDoc    String? // data URL — scanned address proof
+  dlNumber           String? // driving licence number
+  dlExpiry           String? // licence validity (yyyy-mm-dd)
+  dlDoc              String? // data URL — scanned licence
+  // ---- Lead tracking ----
+  source             String   @default("WhatsApp") // WhatsApp | Google Maps | Instagram | Facebook | Website | Walk-in | Referral | Repeat | Other
+  sourceNote         String? // e.g. "Came from Reel on Kaziranga"
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  agreements         Agreement[]
+}
+
+// ---- v6: Rental agreements with one-time e-sign links ----------------
+// The admin creates an agreement for a customer; the app stores ONLY a
+// SHA-256 hash of the secret token, so a database leak never reveals a
+// working link. When the customer signs, the token hash is wiped (the
+// link dies instantly), the signature is merged into a PDF and the
+// signed document is kept here for download.
+model Agreement {
+  id                 String    @id @default(cuid())
+  tokenHash          String?   @unique // SHA-256 of the one-time token; null = link consumed/revoked
+  customerId         String
+  customer           Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  // ---- trip details printed in the agreement ----
+  vehicleName        String?
+  registrationNumber String?
+  rentalStart        String?
+  rentalEnd          String?
+  pickupPoint        String?
+  dropPoint          String?
+  rateSummary        String? // e.g. "Rs 3,500/day self-drive · Rs 400 security deposit"
+  depositAmount      String?
+  extraTerms         String? // owner's special conditions
+  body               String // full agreement text (merge fields already resolved)
+  status             String    @default("pending") // pending | signed | revoked
+  expiresAt          DateTime // the one-time link dies at this time too
+  // ---- filled at signing time ----
+  signedAt           DateTime?
+  signerName         String?
+  signatureImage     String? // data URL (PNG) — drawn or uploaded signature
+  signatureType      String? // drawn | uploaded
+  signerIp           String?
+  signerUa           String?
+  signedPdf          String? // base64 PDF with the merged signature
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
