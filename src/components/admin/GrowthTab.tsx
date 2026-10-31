@@ -71,6 +71,18 @@ const SEO_FIELDS: { key: string; label: string; placeholder: string; hint?: stri
     placeholder: "Paste the google-site-verification value",
     hint: "Search Console → verify by HTML tag → copy only the long code string.",
   },
+  {
+    key: "socialFacebookUrl",
+    label: "Facebook page URL (once you create it)",
+    placeholder: "https://facebook.com/roamsaathi",
+    hint: "Links your Facebook page to the site's structured data — Google uses it to connect your business profiles.",
+  },
+  {
+    key: "socialInstagramUrl",
+    label: "Instagram profile URL (once you create it)",
+    placeholder: "https://instagram.com/roamsaathi",
+    hint: "Same as above: pasted here, your Instagram becomes part of your Google business entity.",
+  },
 ];
 
 function Check({ ok, children }: { ok: boolean; children: React.ReactNode }) {

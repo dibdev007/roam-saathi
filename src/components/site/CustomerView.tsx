@@ -59,7 +59,6 @@ import {
 import {
   TRUST_BADGES,
   STATS,
-  FLEET_CATEGORIES,
   ROUTES,
   HOW_STEPS,
   REASONS,
@@ -487,6 +486,12 @@ function Fleet({
   onBookVehicle: BookVehicleFn;
 }) {
   const [filter, setFilter] = React.useState<string>("ALL");
+  // v8: honest empty-state contacts (owner may have removed every vehicle).
+  const contact = getContact(settings);
+  const waEnquiry = buildWhatsAppUrl(
+    "Hello Roam Saathi! Please share today's available vehicles and rates.",
+    contact.whatsapp
+  );
   const classes = React.useMemo(() => {
     const present = new Set(vehicles.map((v) => v.class));
     return VEHICLE_CLASSES.filter((c) => present.has(c));
@@ -549,35 +554,31 @@ function Fleet({
           </>
         )}
 
-        {/* Fallback when DB is empty */}
+        {/* v8: honest empty state — the owner removed every vehicle (or is
+            still setting up). No demo data; deletions are permanent. */}
         {vehicles.length === 0 && (
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {FLEET_CATEGORIES.map((c, i) => (
-              <Reveal key={c.key} delay={i * 80}>
-                <Card className="card-lift h-full border-forest/10 bg-white">
-                  <CardContent className="p-0">
-                    <div className="relative aspect-[16/10] overflow-hidden rounded-t-lg">
-                      { }
-                      <img
-                        src={images[`${c.imageKey}.png`] ? `/${c.imageKey}.png` : `/${c.imageKey}-fallback.svg`}
-                        alt={c.name}
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <div className="p-4">
-                      <p className="font-display text-lg font-bold text-forest">{c.name}</p>
-                      <p className="text-xs text-muted-foreground">{c.examples.join(" · ")}</p>
-                      <p className="mt-2 text-[13px] leading-relaxed text-ink/70">{c.blurb}</p>
-                      <p className="mt-3 text-sm font-bold text-saffron-deep">
-                        from {inr(c.fromPrice)}/day
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Reveal>
-            ))}
-          </div>
+          <Reveal>
+            <div className="mt-10 rounded-2xl border border-dashed border-forest/25 bg-white/70 px-6 py-12 text-center">
+              <p className="font-display text-xl font-bold text-forest sm:text-2xl">
+                Our fleet list is being updated
+              </p>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-ink/70">
+                We are refreshing our vehicle list right now. Message us on WhatsApp and we
+                will share today&apos;s available cars, scooters and vans with current rates
+                within minutes — airport pickup included, 24×7.
+              </p>
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <Button asChild>
+                  <a href={waEnquiry} target="_blank" rel="noopener noreferrer">
+                    <MessageCircle className="h-4 w-4" /> WhatsApp us for today&apos;s fleet
+                  </a>
+                </Button>
+                <Button variant="outline" asChild>
+                  <a href={buildTelUrl(contact.phone)}>Call {contact.phoneDisplay}</a>
+                </Button>
+              </div>
+            </div>
+          </Reveal>
         )}
       </div>
     </section>
