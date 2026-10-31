@@ -25,17 +25,36 @@ export type SiteSeo = {
 
 const DEFAULT_KEYWORDS = [
   "car rental Guwahati",
-  "self drive car Guwahati",
+  "car rental near me",
+  "vehicles near me",
+  "vehicles for rent near me",
+  "taxi near me",
+  "taxi service Guwahati",
   "taxi Guwahati airport",
+  "airport taxi Guwahati",
+  "cab service Guwahati",
+  "cab booking Guwahati",
+  "outstation cab Guwahati",
+  "self drive car Guwahati",
+  "self drive car rental Assam",
   "LGBI airport car rental",
+  "Guwahati airport taxi service",
   "Northeast India car rental",
+  "car hire Meghalaya",
   "Shillong taxi",
+  "Shillong cab booking",
+  "Cherrapunji taxi service",
   "Tawang cab",
+  "Tawang taxi from Guwahati",
   "Kaziranga car hire",
+  "Kaziranga safari taxi",
+  "Kamakhya temple taxi",
   "Innova Crysta Guwahati",
   "Tempo Traveller Assam",
   "tourist vehicle rental Assam",
   "Borjhar car rental",
+  "Mirza car rental",
+  "vehicle rental Guwahati airport",
 ];
 
 export const DEFAULT_SEO_TITLE =
@@ -66,6 +85,61 @@ export function getSiteSeo(settings?: SettingsMap): SiteSeo {
     verification: (s.seoVerification ?? "").trim() || null,
     phone: (s.businessPhone ?? "").trim() || BUSINESS_PHONE,
     email: (s.email ?? "").trim() || EMAIL,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* v7 — FAQ rich results: helping Google answer the exact questions     */
+/* travellers type ("car rental near LGBI airport", "self drive        */
+/* Guwahati", "taxi to Shillong"). Rendered on the homepage as JSON-LD. */
+/* ------------------------------------------------------------------ */
+
+export function buildFaqJsonLd(phoneDisplay: string): object {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      {
+        "@type": "Question",
+        name: "Is there a car rental near LGBI Airport Guwahati?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: `Yes. Roam Saathi is located right near Lokpriya Gopinath Bordoloi International (LGBI) Airport in Borjhar, Guwahati, and the counter is open 24/7 for airport pickups. Call ${phoneDisplay} or book on the website and a vehicle waits for you at arrivals.`,
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Can I rent a self drive car in Guwahati?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Yes. Roam Saathi offers self drive hatchbacks, SUVs and scooters with transparent per-day rates. You need a valid driving licence, a government ID (Aadhaar/passport) and a refundable security deposit. Book on WhatsApp or through the website booking form.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Do you provide outstation taxis from Guwahati to Shillong, Kaziranga or Tawang?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Yes. Chauffeur-driven sedans, SUVs, Innova Crysta and Tempo Travellers run to Shillong, Cherrapunji, Kaziranga, Tawang, Majuli, Kamakhya Temple and every Northeast state. Fuel and tolls are included with driver; fares are quoted per route before you confirm.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "How do I book a taxi or rental vehicle with Roam Saathi?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: `The fastest way is WhatsApp — send your trip dates, route and vehicle preference and you get a confirmed fare within minutes. You can also call ${phoneDisplay} or use the booking form on roamsaathi.in. Airport pickup is available 24/7.`,
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Which areas does Roam Saathi serve?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Based near LGBI Airport, Borjhar, Guwahati, Roam Saathi serves Guwahati city, the airport and hotel delivery across the city, plus outstation trips across Assam, Meghalaya, Arunachal Pradesh, Nagaland, Manipur, Mizoram, Tripura and Sikkim.",
+        },
+      },
+    ],
   };
 }
 

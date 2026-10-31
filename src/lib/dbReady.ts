@@ -1,5 +1,5 @@
 /**
- * Self-healing database readiness for Roam Saathi (v5 fix).
+ * Self-healing database readiness for Roam Saathi (v8 fix).
  *
  * WHY THIS EXISTS
  * ---------------
@@ -8,22 +8,35 @@
  * never provisioned, or an ephemeral SQLite on serverless). Previously the
  * ONLY way to provision was visiting /api/setup manually — easy to miss.
  *
- * WHAT THIS DOES
- * --------------
+ * THE v8 BUG THIS FILE FIXES
+ * --------------------------
+ * The v5 logic treated "Vehicle or Hotel table is empty" as "database is
+ * brand new" and re-seeded the starter fleet/stays on the next cold start.
+ * So when the owner deleted ALL demo vehicles (or all demo stays) from the
+ * admin panel, the initial 17 vehicles + 5 stays silently came back —
+ * deletions were never permanent.
+ *
+ * WHAT THIS DOES NOW
+ * ------------------
  * `ensureDatabaseReady()` runs before important DB reads. It:
- *   1. Fast path — counts vehicles & hotels; if both succeed AND are
- *      non-empty, the database is ready (2 cheap queries).
- *   2. Slow path — otherwise it runs provisionDatabase(): CREATE TABLE IF
- *      NOT EXISTS for Vehicle / Booking / Settings / Page / Hotel, adds
- *      missing upgrade columns, and seeds the 17-vehicle rate card,
- *      default settings, starter pages and 5 partner stays — but ONLY when
- *      the tables are empty. Owner data is never overwritten.
- *   3. If the database is truly unreachable (bad DATABASE_URL, read-only
- *      filesystem…), it fails SOFT: callers catch and the UI falls back to
- *      the built-in fleet/stays so the site never looks broken.
+ *   1. Seed-marker fast path — looks for a Settings row `seed_version`.
+ *      If it exists the database has been provisioned before, so seeding
+ *      NEVER runs again, even if the owner deleted every vehicle, stay,
+ *      page and booking. Owner deletions are permanent.
+ *   2. In-use detection — databases provisioned before v8 have no marker.
+ *      If ANY table holds rows (even just the default settings), the
+ *      database is clearly in use: write the marker and stand down. This
+ *      makes already-deleted demo data permanent the moment v8 deploys.
+ *   3. Fresh-database path — only when every table is empty (or missing)
+ *      does it run provisionDatabase(): CREATE TABLE IF NOT EXISTS for all
+ *      seven tables, adds missing upgrade columns, and seeds the starter
+ *      fleet, settings, pages and stays. Then it writes the marker.
+ *   4. If the database is truly unreachable (bad DATABASE_URL, read-only
+ *      filesystem…), it fails SOFT: callers catch and the public UI falls
+ *      back to the built-in fleet/stays so the site never looks broken.
  *
  * The promise is cached on globalThis per serverless instance, so the
- * overhead is 2 COUNT queries per cold start — nothing more.
+ * overhead is one tiny SELECT per cold start — nothing more.
  */
 
 import { db } from "./db";
@@ -37,24 +50,60 @@ type ReadyState = {
 
 const g = globalThis as unknown as { __rsDbReady?: Promise<ReadyState> };
 
-async function run(): Promise<ReadyState> {
-  // 1. Fast path — already provisioned and populated?
+/** Settings row that proves "this database was provisioned — never seed again". */
+const SEED_MARKER_KEY = "seed_version";
+const SEED_MARKER_VALUE = "roam-saathi-v8";
+
+async function markSeeded(): Promise<void> {
   try {
-    const [v, h] = await Promise.all([db.vehicle.count(), db.hotel.count()]);
-    if (v > 0 && h > 0) {
+    await db.settings.upsert({
+      where: { key: SEED_MARKER_KEY },
+      update: { value: SEED_MARKER_VALUE },
+      create: { key: SEED_MARKER_KEY, value: SEED_MARKER_VALUE },
+    });
+  } catch (e) {
+    console.error("[dbReady] could not persist seed marker (will retry next request):", e);
+  }
+}
+
+async function run(): Promise<ReadyState> {
+  // 1. Fast path — provisioned before? Never seed again, whatever the counts.
+  try {
+    const marker = await db.settings.findUnique({ where: { key: SEED_MARKER_KEY } });
+    if (marker) {
       return { ok: true, action: "ready" };
     }
-    // Tables exist but are empty → fall through and seed them.
   } catch {
-    // Tables missing or DB unreachable → fall through and try provisioning.
+    // Settings table missing or DB unreachable — continue below.
   }
 
-  // 2. Provision (idempotent: IF NOT EXISTS DDL + seed-only-when-empty).
+  // 2. In-use detection — a pre-marker (v5–v7) database with ANY rows must
+  //    never be touched. Note this also protects a database where the owner
+  //    already deleted the entire fleet: the settings rows prove it is in use.
+  try {
+    const [v, h, b, s, p] = await Promise.all([
+      db.vehicle.count(),
+      db.hotel.count(),
+      db.booking.count(),
+      db.settings.count(),
+      db.page.count(),
+    ]);
+    if (v + h + b + s + p > 0) {
+      await markSeeded();
+      return { ok: true, action: "ready" };
+    }
+    // Every table empty AND no marker → genuinely fresh database → seed below.
+  } catch {
+    // Tables missing or DB unreachable — try provisioning below.
+  }
+
+  // 3. Provision (idempotent: IF NOT EXISTS DDL + seed-only-when-empty).
   // The cast is safe: provisionDatabase duck-types the delegates it needs
   // (count / createMany / $executeRawUnsafe) and the Prisma client provides
   // exactly those — the structural mismatch is only in Prisma's generics.
   try {
     await provisionDatabase(db as unknown as Parameters<typeof provisionDatabase>[0]);
+    await markSeeded();
     return { ok: true, action: "provisioned" };
   } catch (e) {
     console.error("[dbReady] auto-provision failed — site will use built-in fallbacks:", e);
