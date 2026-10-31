@@ -4,7 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { db } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/dbReady";
-import { getSiteSeo } from "@/lib/seo";
+import { getSiteSeo, buildFaqJsonLd } from "@/lib/seo";
 import { MarketingScripts } from "@/components/site/Analytics";
 import {
   BUSINESS_NAME,
@@ -41,6 +41,17 @@ async function loadSettings(): Promise<SettingsMap> {
   } catch {
     return {};
   }
+}
+
+/** v7 — every social profile the owner connects becomes an entity link. */
+function buildSameAs(settings: SettingsMap): string[] {
+  const wa = (settings.whatsappNumber ?? "").replace(/\D/g, "") || "919876543210";
+  const links = [`https://wa.me/${wa}`];
+  for (const key of ["socialFacebookUrl", "socialInstagramUrl"] as const) {
+    const v = (settings[key] ?? "").trim();
+    if (/^https:\/\//i.test(v)) links.push(v);
+  }
+  return links;
 }
 
 /* ------------------------------------------------------------------ */
@@ -181,8 +192,12 @@ export default async function RootLayout({
       { "@type": "State", name: "Tripura" },
       { "@type": "State", name: "Sikkim" },
     ],
-    sameAs: [`https://wa.me/${(settings.whatsappNumber ?? "").replace(/\D/g, "") || "919876543210"}`],
+    sameAs: buildSameAs(settings),
   };
+
+  // v7 — FAQ rich results for the exact searches travellers type
+  // ("car rental near me", "taxi Guwahati airport", "Shillong cab").
+  const faqJsonLd = buildFaqJsonLd(seo.phone);
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -196,6 +211,10 @@ export default async function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
         />
       </body>
     </html>

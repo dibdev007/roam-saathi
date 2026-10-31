@@ -94,8 +94,10 @@ function detectImages(): Record<string, boolean> {
  * never-provisioned database it creates the tables and seeds the starter
  * fleet/stays/pages automatically, so a new deployment shows real data on
  * the very first visit (this was the "fleet & rates show nothing" bug).
- * If the database is truly unreachable we degrade gracefully to empty
- * values — the UI falls back to the built-in fleet and siteConfig defaults.
+ * v8 fix: the response now carries `dbOk`. The built-in starter fleet is
+ * rendered ONLY when the database is unreachable (dbOk = false). When the
+ * database is reachable but the owner deleted every vehicle, we show the
+ * honest empty state — demo data must never reappear after a deletion.
  */
 async function loadSiteData(): Promise<{
   vehicles: VehicleDTO[];
@@ -103,6 +105,7 @@ async function loadSiteData(): Promise<{
   menuPages: PageDTO[];
   homePages: PageDTO[];
   hotels: HotelDTO[];
+  dbOk: boolean;
 }> {
   try {
     await ensureDatabaseReady();
@@ -172,23 +175,31 @@ async function loadSiteData(): Promise<{
       menuPages: menuRows.map(toDTO),
       homePages: homeRows.map(toDTO),
       hotels,
+      dbOk: true,
     };
   } catch (e) {
     console.error("[page] Failed to load site data from DB:", e);
-    return { vehicles: [], settings: {}, menuPages: [], homePages: [], hotels: [] };
+    return {
+      vehicles: [],
+      settings: {},
+      menuPages: [],
+      homePages: [],
+      hotels: [],
+      dbOk: false,
+    };
   }
 }
 
 export default async function Page() {
   const images = detectImages();
-  const { vehicles, settings, menuPages, homePages, hotels } = await loadSiteData();
+  const { vehicles, settings, menuPages, homePages, hotels, dbOk } = await loadSiteData();
   return (
     <RoamSaathiApp
       images={images}
-      // v5: never show an empty fleet — if the DB has no vehicles (or is
-      // unreachable) render the built-in starter fleet so rates and the
-      // booking form always work.
-      vehicles={vehicles.length > 0 ? vehicles : defaultFleetVehicles()}
+      // v8: the built-in starter fleet renders only when the database is
+      // UNREACHABLE (dbOk=false). When the owner deleted every vehicle we
+      // show the real (empty) state — deletions stay permanent.
+      vehicles={dbOk ? vehicles : defaultFleetVehicles()}
       settings={settings}
       menuPages={menuPages}
       homePages={homePages}
