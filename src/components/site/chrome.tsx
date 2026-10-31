@@ -429,7 +429,7 @@ export function SiteFooter({
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-cream/15 pt-6 text-xs text-cream/50 sm:flex-row">
-          <p>© {new Date().getFullYear()} {BUSINESS_NAME}. Made with pride in Assam.</p>
+          <p>© {new Date().getFullYear()} {BUSINESS_NAME}. Made with love by <a href="https://questtechno.web.app/">Quest Technologies</a>.</p>
           <p>With driver: fuel &amp; toll included · Self-drive: fuel &amp; toll at actuals</p>
         </div>
       </div>
