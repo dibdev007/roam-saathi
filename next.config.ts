@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 /**
- * v6 security headers.
+ * v6/v7/v8 security headers.
  *  - nosniff / frame / referrer / permissions policies apply site-wide.
  *  - HSTS tells browsers to always use HTTPS once on the domain.
  *    (Safe with Cloudflare/Vercel HTTPS — the site is fully https.)
