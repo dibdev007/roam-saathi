@@ -178,6 +178,22 @@ CREATE TABLE IF NOT EXISTS "Agreement" (
     CONSTRAINT "Agreement_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+-- CreateTable
+CREATE TABLE IF NOT EXISTS "RouteOffer" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "duration" TEXT NOT NULL DEFAULT '',
+    "vehicle" TEXT NOT NULL DEFAULT '',
+    "kmOneWay" INTEGER NOT NULL DEFAULT 100,
+    "highlights" TEXT NOT NULL DEFAULT '[]',
+    "note" TEXT,
+    "showOnSite" BOOLEAN NOT NULL DEFAULT true,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "RouteOffer_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX IF NOT EXISTS "Settings_key_key" ON "Settings"("key");
 
@@ -295,11 +311,11 @@ VALUES ('set-adminpasscode', 'adminPasscode', 'roam2024')
 ON CONFLICT ("id") DO NOTHING;
 
 INSERT INTO "Settings" ("id","key","value")
-VALUES ('set-adminpasswordhash', 'adminPasswordHash', '9400a21b9ae718919828ae4b17550a2e774ee0635171ec5386d2b216f3eb4fed64a4ecd795ec518ece80e998346f012a8db2005c9ab77c7cfee21710c8830375')
+VALUES ('set-adminpasswordhash', 'adminPasswordHash', '366bcceb2e0769e2be0f6ece11f892a01918bfb0039b428d26eb8c8614d144cf266c737846c63d027d446809e6505e78bd26a1e922b68f9db99dc2701ff5a99e')
 ON CONFLICT ("id") DO NOTHING;
 
 INSERT INTO "Settings" ("id","key","value")
-VALUES ('set-adminpasswordsalt', 'adminPasswordSalt', 'fbd80b6a48f744a71e1d167e4687e84f')
+VALUES ('set-adminpasswordsalt', 'adminPasswordSalt', '242e52014c181f68721016f655effd19')
 ON CONFLICT ("id") DO NOTHING;
 
 INSERT INTO "Settings" ("id","key","value")
@@ -374,11 +390,11 @@ VALUES ('set2-adminpasscode', 'adminPasscode', 'roam2024')
 ON CONFLICT ("key") DO NOTHING;
 
 INSERT INTO "Settings" ("id","key","value")
-VALUES ('set2-adminpasswordhash', 'adminPasswordHash', 'a322905e8b3c9d6c14baf1b89bb3db0759c21f6d4d3276e2efb4e552f25a5a822a340805e5dbe25d45714379ec2bef85007e74da5a23f6feb45ca889be2ce13d')
+VALUES ('set2-adminpasswordhash', 'adminPasswordHash', 'f5c555f907999fa01b7e7ab43ef7d605ce528ae190a6d57d35d8e10ab89572128511f3d3f06ad220319ea94694c5cf04cd1382409e35d201fe604153c86a2e75')
 ON CONFLICT ("key") DO NOTHING;
 
 INSERT INTO "Settings" ("id","key","value")
-VALUES ('set2-adminpasswordsalt', 'adminPasswordSalt', '0416607cc91f8b1b054e92af3b547d7a')
+VALUES ('set2-adminpasswordsalt', 'adminPasswordSalt', 'c165fa4752ffd589ca33c24cf6ca2136')
 ON CONFLICT ("key") DO NOTHING;
 
 INSERT INTO "Settings" ("id","key","value")
@@ -479,6 +495,37 @@ VALUES ('stay-iora-the-kaziranga-retreat', 'Iora — The Kaziranga Retreat', 'As
 ON CONFLICT ("id") DO NOTHING;
 
 
+-- ============================================================
+-- Starter Popular Routes (edit/delete from Admin → Routes —
+-- deletions are permanent; the site never re-seeds them).
+-- ============================================================
+
+INSERT INTO "RouteOffer" ("id","title","duration","vehicle","kmOneWay","highlights","note","showOnSite","sortOrder")
+VALUES ('route-guwahati-shillong-cherrapunji', 'Guwahati → Shillong → Cherrapunji', '3N / 4D', 'SUV (Innova / Scorpio) with driver', 150, '["Umiam Lake","Elephant Falls","Double Decker Living Root Bridge","Nohkalikai Falls"]', NULL, true, 1)
+ON CONFLICT ("id") DO NOTHING;
+
+INSERT INTO "RouteOffer" ("id","title","duration","vehicle","kmOneWay","highlights","note","showOnSite","sortOrder")
+VALUES ('route-guwahati-kaziranga', 'Guwahati → Kaziranga', '2N / 3D', 'SUV or Innova with driver', 200, '["Early-morning elephant safari","Central Range jeep safari","Kaziranga Orchid Park"]', NULL, true, 2)
+ON CONFLICT ("id") DO NOTHING;
+
+INSERT INTO "RouteOffer" ("id","title","duration","vehicle","kmOneWay","highlights","note","showOnSite","sortOrder")
+VALUES ('route-guwahati-tawang', 'Guwahati → Tawang', '6N / 7D', 'SUV (Thar / Scorpio) with driver', 450, '["Bhalukpong / Sela Pass","Tawang Monastery","Madhuri Lake","PTTso Lake"]', 'ILP required for Arunachal Pradesh — we help arrange it.', true, 3)
+ON CONFLICT ("id") DO NOTHING;
+
+INSERT INTO "RouteOffer" ("id","title","duration","vehicle","kmOneWay","highlights","note","showOnSite","sortOrder")
+VALUES ('route-guwahati-manas-national-park', 'Guwahati → Manas National Park', '2N / 3D', 'SUV with driver', 180, '["UNESCO World Heritage Site","River rafting","Tiger & golden langur spotting"]', NULL, true, 4)
+ON CONFLICT ("id") DO NOTHING;
+
+INSERT INTO "RouteOffer" ("id","title","duration","vehicle","kmOneWay","highlights","note","showOnSite","sortOrder")
+VALUES ('route-guwahati-majuli-island', 'Guwahati → Majuli Island', '3N / 4D', 'Hatchback/SUV + ferry', 350, '["World''s largest river island","Satras (Vaishnavite monasteries)","Mask-making village"]', NULL, true, 5)
+ON CONFLICT ("id") DO NOTHING;
+
+INSERT INTO "RouteOffer" ("id","title","duration","vehicle","kmOneWay","highlights","note","showOnSite","sortOrder")
+VALUES ('route-guwahati-city-day-tour', 'Guwahati city day tour', '1 day', 'Hatchback or sedan with driver', 25, '["Kamakhya Temple","Umananda Island","Assam State Museum","Sunset cruise on the Brahmaputra"]', NULL, true, 6)
+ON CONFLICT ("id") DO NOTHING;
+
+
 -- Done! Open your site — the fleet section now shows 17 vehicles,
--- /stays shows 5 partner stays, the CRM (Admin → Customers) and
+-- /stays shows 5 partner stays, the homepage shows 6 popular routes,
+-- the CRM (Admin → Customers) and
 -- one-time e-sign agreements are ready, and Admin (/admin) is set up.

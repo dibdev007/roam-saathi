@@ -154,6 +154,24 @@ model Customer {
   agreements         Agreement[]
 }
 
+// ---- v9: Popular routes (admin-managed) ------------------------------
+// The "Where will the road take you?" homepage section — fully managed from
+// Admin → Routes. kmOneWay powers the self-drive fuel estimate. Deletions
+// are permanent (starter routes seed exactly once, seed-once marker).
+model RouteOffer {
+  id         String   @id @default(cuid())
+  title      String
+  duration   String   @default("")
+  vehicle    String   @default("")
+  kmOneWay   Int      @default(100)
+  highlights String   @default("[]")
+  note       String?
+  showOnSite Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 // ---- v6: Rental agreements with one-time e-sign links -----------------
 model Agreement {
   id                 String    @id @default(cuid())

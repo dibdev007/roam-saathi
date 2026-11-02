@@ -124,6 +124,26 @@ model Hotel {
   updatedAt   DateTime @updatedAt
 }
 
+// ---- v9: Popular routes (admin-managed) ------------------------------
+// The "Where will the road take you?" homepage section. The owner adds,
+// edits and deletes route cards from Admin → Routes — no code, no redeploy.
+// kmOneWay powers the self-drive fuel estimate on each card. Deletions are
+// permanent: the starter routes seed exactly once (seed-once markers, same
+// promise as the v8 fleet/stays fix).
+model RouteOffer {
+  id         String   @id @default(cuid())
+  title      String // "Guwahati → Shillong → Cherrapunji"
+  duration   String   @default("") // "3N / 4D", "1 day"…
+  vehicle    String   @default("") // recommended vehicle line
+  kmOneWay   Int      @default(100) // approx one-way km from Guwahati
+  highlights String   @default("[]") // JSON array of stop names
+  note       String? // e.g. ILP notice for Arunachal
+  showOnSite Boolean  @default(true)
+  sortOrder  Int      @default(0) // lower = shown first
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 // ---- v6: Customers (CRM + KYC) ---------------------------------------
 // Every renter the owner wins — captured with the channel that brought
 // them (WhatsApp, Google Maps, walk-in…) plus the full KYC pack Indian
