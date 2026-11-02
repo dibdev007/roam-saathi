@@ -245,6 +245,35 @@ export function hotelPhoneDisplay(phone: string): string {
   return phone;
 }
 
+/* ------------------------------------------------------------------ */
+/* v9 — Popular routes (admin-managed)                                  */
+/* ------------------------------------------------------------------ */
+
+// One route card in the "Where will the road take you?" homepage section.
+// Everything the owner can edit from Admin → Routes; deletions are
+// permanent (the starter routes seed exactly once, same promise as v8).
+export type RouteDTO = {
+  id: string;
+  title: string;
+  duration: string;
+  vehicle: string;
+  kmOneWay: number;
+  highlights: string; // JSON array of stop names
+  note: string | null;
+  showOnSite: boolean;
+  sortOrder: number;
+};
+
+/** Parse the JSON highlights array stored on a route row. */
+export function routeHighlights(r: Pick<RouteDTO, "highlights">): string[] {
+  try {
+    const arr = JSON.parse(r.highlights || "[]");
+    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string" && x) : [];
+  } catch {
+    return [];
+  }
+}
+
 // Vehicle shape shared between server, customer view and admin portal.
 export type VehicleDTO = {
   id: string;

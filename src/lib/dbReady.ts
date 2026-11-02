@@ -1,5 +1,5 @@
 /**
- * Self-healing database readiness for Roam Saathi (v8 fix).
+ * Self-healing database readiness for Roam Saathi (v8 fix, extended v9).
  *
  * WHY THIS EXISTS
  * ---------------
@@ -22,25 +22,26 @@
  *   1. Seed-marker fast path — looks for a Settings row `seed_version`.
  *      If it exists the database has been provisioned before, so seeding
  *      NEVER runs again, even if the owner deleted every vehicle, stay,
- *      page and booking. Owner deletions are permanent.
+ *      route, page and booking. Owner deletions are permanent.
  *   2. In-use detection — databases provisioned before v8 have no marker.
  *      If ANY table holds rows (even just the default settings), the
  *      database is clearly in use: write the marker and stand down. This
- *      makes already-deleted demo data permanent the moment v8 deploys.
+ *      makes already-deleted demo data permanent the moment v9 deploys.
  *   3. Fresh-database path — only when every table is empty (or missing)
  *      does it run provisionDatabase(): CREATE TABLE IF NOT EXISTS for all
- *      seven tables, adds missing upgrade columns, and seeds the starter
- *      fleet, settings, pages and stays. Then it writes the marker.
+ *      eight tables, adds missing upgrade columns, and seeds the starter
+ *      fleet, settings, pages, stays and routes. Then it writes the marker.
  *   4. If the database is truly unreachable (bad DATABASE_URL, read-only
  *      filesystem…), it fails SOFT: callers catch and the public UI falls
- *      back to the built-in fleet/stays so the site never looks broken.
+ *      back to the built-in fleet/stays/routes so the site never looks
+ *      broken.
  *
  * The promise is cached on globalThis per serverless instance, so the
  * overhead is one tiny SELECT per cold start — nothing more.
  */
 
 import { db } from "./db";
-import { provisionDatabase } from "./setupData";
+import { provisionDatabase, upgradeAddRouteOffers } from "./setupData";
 
 type ReadyState = {
   ok: boolean;
@@ -52,7 +53,7 @@ const g = globalThis as unknown as { __rsDbReady?: Promise<ReadyState> };
 
 /** Settings row that proves "this database was provisioned — never seed again". */
 const SEED_MARKER_KEY = "seed_version";
-const SEED_MARKER_VALUE = "roam-saathi-v8";
+const SEED_MARKER_VALUE = "roam-saathi-v9";
 
 async function markSeeded(): Promise<void> {
   try {
@@ -71,6 +72,10 @@ async function run(): Promise<ReadyState> {
   try {
     const marker = await db.settings.findUnique({ where: { key: SEED_MARKER_KEY } });
     if (marker) {
+      // v9 upgrade: make sure the RouteOffer table exists on pre-v9
+      // databases — WITHOUT touching any other table, so deletions the
+      // owner made under v8 stay permanent.
+      await upgradeAddRouteOffers(db as unknown as Parameters<typeof provisionDatabase>[0]);
       return { ok: true, action: "ready" };
     }
   } catch {
@@ -88,7 +93,18 @@ async function run(): Promise<ReadyState> {
       db.settings.count(),
       db.page.count(),
     ]);
-    if (v + h + b + s + p > 0) {
+    // routeOffer is checked separately: on a pre-v9 database the table does
+    // not exist yet and a missing table must NEVER look like "fresh database"
+    // (that would fall through to provisioning and re-seed deleted data).
+    let r = 0;
+    try {
+      r = await db.routeOffer.count();
+    } catch {
+      r = 0; // table missing — it is added below by the v9 upgrade
+    }
+    if (v + h + b + s + p + r > 0) {
+      // v9 upgrade first (adds only the RouteOffer table), then stand down.
+      await upgradeAddRouteOffers(db as unknown as Parameters<typeof provisionDatabase>[0]);
       await markSeeded();
       return { ok: true, action: "ready" };
     }

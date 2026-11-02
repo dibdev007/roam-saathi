@@ -185,6 +185,23 @@ CREATE TABLE IF NOT EXISTS "Agreement" (
     CONSTRAINT "Agreement_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE CASCADE ON UPDATE CASCADE
 )`;
 
+// v9 — Popular routes (admin-managed homepage section).
+export const ROUTE_OFFER_DDL = `
+CREATE TABLE IF NOT EXISTS "RouteOffer" (
+    "id" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "duration" TEXT NOT NULL DEFAULT '',
+    "vehicle" TEXT NOT NULL DEFAULT '',
+    "kmOneWay" INTEGER NOT NULL DEFAULT 100,
+    "highlights" TEXT NOT NULL DEFAULT '[]',
+    "note" TEXT,
+    "showOnSite" BOOLEAN NOT NULL DEFAULT true,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "RouteOffer_pkey" PRIMARY KEY ("id")
+)`;
+
 export const INDEX_DDLS = [
   `CREATE UNIQUE INDEX IF NOT EXISTS "Settings_key_key" ON "Settings"("key")`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "Page_slug_key" ON "Page"("slug")`,
@@ -200,6 +217,7 @@ export const UPGRADE_DDLS = [
   HOTEL_DDL,
   CUSTOMER_DDL,
   AGREEMENT_DDL,
+  ROUTE_OFFER_DDL,
   ...INDEX_DDLS,
   `ALTER TABLE "Vehicle" ADD COLUMN "mileageKmpl" INTEGER`,
   `ALTER TABLE "Vehicle" ADD COLUMN "fuelNote" TEXT`,
@@ -657,6 +675,7 @@ export type ProvisionResult = {
   settingsSeeded: number;
   pagesSeeded: number;
   hotelsSeeded: number;
+  routesSeeded: number;
   counts: {
     vehicles: number;
     bookings: number;
@@ -690,6 +709,7 @@ type ProvisionDb = {
   };
   customer: { count(): Promise<number> };
   agreement: { count(): Promise<number> };
+  routeOffer: { count(): Promise<number>; createMany(a: { data: unknown }): Promise<{ count: number }> };
 };
 
 /**
@@ -781,6 +801,39 @@ export async function ensureV3Defaults(db: ProvisionDb): Promise<{
 }
 
 /**
+ * v9 upgrade path — add the RouteOffer table (and starter routes, only if
+ * the new table is empty) to a database provisioned before v9, WITHOUT
+ * touching any other table. This is deliberately NOT provisionDatabase():
+ * that function re-seeds any table that is empty, which would resurrect
+ * vehicles/stays the owner deliberately deleted (the v8 bug). Safe to run
+ * repeatedly; returns true when the table was created now.
+ */
+export async function upgradeAddRouteOffers(db: ProvisionDb): Promise<boolean> {
+  try {
+    await db.routeOffer.count();
+    return false; // table already exists — nothing to do
+  } catch {
+    /* table missing → create it below */
+  }
+  await db.$executeRawUnsafe(ROUTE_OFFER_DDL);
+  const c = await db.routeOffer.count();
+  if (c === 0) {
+    const rows = SEED_ROUTES.map((r) => ({
+      title: r.title,
+      duration: r.duration,
+      vehicle: r.vehicle,
+      kmOneWay: r.kmOneWay,
+      highlights: JSON.stringify(r.highlights),
+      note: r.note ?? null,
+      showOnSite: r.showOnSite,
+      sortOrder: r.sortOrder,
+    }));
+    await db.routeOffer.createMany({ data: rows });
+  }
+  return true;
+}
+
+/**
  * Create tables if missing, upgrade older tables, then seed when empty.
  * Safe to call multiple times — existing data is never touched.
  */
@@ -796,6 +849,7 @@ export async function provisionDatabase(db: ProvisionDb): Promise<ProvisionResul
   await db.$executeRawUnsafe(HOTEL_DDL);
   await db.$executeRawUnsafe(CUSTOMER_DDL);
   await db.$executeRawUnsafe(AGREEMENT_DDL);
+  await db.$executeRawUnsafe(ROUTE_OFFER_DDL);
   tablesCreated.push(
     "Vehicle",
     "Booking",
@@ -803,7 +857,8 @@ export async function provisionDatabase(db: ProvisionDb): Promise<ProvisionResul
     "Page",
     "Hotel",
     "Customer",
-    "Agreement"
+    "Agreement",
+    "RouteOffer"
   );
 
   for (const idx of INDEX_DDLS) {
@@ -825,6 +880,7 @@ export async function provisionDatabase(db: ProvisionDb): Promise<ProvisionResul
   let settingsSeeded = 0;
   let pagesSeeded = 0;
   let hotelsSeeded = 0;
+  let routesSeeded = 0;
 
   const vCount = await db.vehicle.count();
   if (vCount === 0) {
@@ -844,6 +900,23 @@ export async function provisionDatabase(db: ProvisionDb): Promise<ProvisionResul
     const rows = SEED_HOTELS.map((h) => ({ ...h, images: JSON.stringify(h.images ?? []) }));
     await db.hotel.createMany({ data: rows });
     hotelsSeeded = rows.length;
+  }
+
+  // v9 — starter routes, same seed-once promise as everything else.
+  const rCount = await db.routeOffer.count();
+  if (rCount === 0) {
+    const rows = SEED_ROUTES.map((r) => ({
+      title: r.title,
+      duration: r.duration,
+      vehicle: r.vehicle,
+      kmOneWay: r.kmOneWay,
+      highlights: JSON.stringify(r.highlights),
+      note: r.note ?? null,
+      showOnSite: r.showOnSite,
+      sortOrder: r.sortOrder,
+    }));
+    await db.routeOffer.createMany({ data: rows });
+    routesSeeded = rows.length;
   }
 
   const pCount = await db.page.count();
@@ -895,10 +968,15 @@ export async function provisionDatabase(db: ProvisionDb): Promise<ProvisionResul
     hotels: await db.hotel.count(),
     customers: await db.customer.count(),
     agreements: await db.agreement.count(),
+    routes: await db.routeOffer.count(),
   };
 
   const message =
-    vehiclesSeeded > 0 || settingsSeeded > 0 || pagesSeeded > 0 || hotelsSeeded > 0
+    vehiclesSeeded > 0 ||
+    settingsSeeded > 0 ||
+    pagesSeeded > 0 ||
+    hotelsSeeded > 0 ||
+    routesSeeded > 0
       ? "Database ready — tables created and starter data loaded."
       : "Database ready — tables already existed and data was left untouched.";
 
@@ -910,6 +988,7 @@ export async function provisionDatabase(db: ProvisionDb): Promise<ProvisionResul
     settingsSeeded,
     pagesSeeded,
     hotelsSeeded,
+    routesSeeded,
     counts,
     message,
   };
@@ -1082,6 +1161,97 @@ export const SEED_HOTELS: SeedHotel[] = [
     sortOrder: 5,
   },
 ];
+
+/* ------------------------------------------------------------------ */
+/* v9 — Starter routes (Admin → Routes)                                 */
+/* ------------------------------------------------------------------ */
+// The six classic Northeast itineraries shown on the homepage today.
+// Seeded into RouteOffer exactly once; from then on the owner edits or
+// deletes them permanently from the admin portal. This array also powers
+// the built-in fallback when the database is unreachable.
+
+type SeedRoute = {
+  title: string;
+  duration: string;
+  vehicle: string;
+  kmOneWay: number;
+  highlights: string[];
+  note?: string;
+  showOnSite: boolean;
+  sortOrder: number;
+};
+
+export const SEED_ROUTES: SeedRoute[] = [
+  {
+    title: "Guwahati → Shillong → Cherrapunji",
+    duration: "3N / 4D",
+    vehicle: "SUV (Innova / Scorpio) with driver",
+    kmOneWay: 150,
+    highlights: ["Umiam Lake", "Elephant Falls", "Double Decker Living Root Bridge", "Nohkalikai Falls"],
+    showOnSite: true,
+    sortOrder: 1,
+  },
+  {
+    title: "Guwahati → Kaziranga",
+    duration: "2N / 3D",
+    vehicle: "SUV or Innova with driver",
+    kmOneWay: 200,
+    highlights: ["Early-morning elephant safari", "Central Range jeep safari", "Kaziranga Orchid Park"],
+    showOnSite: true,
+    sortOrder: 2,
+  },
+  {
+    title: "Guwahati → Tawang",
+    duration: "6N / 7D",
+    vehicle: "SUV (Thar / Scorpio) with driver",
+    kmOneWay: 450,
+    highlights: ["Bhalukpong / Sela Pass", "Tawang Monastery", "Madhuri Lake", "PTTso Lake"],
+    note: "ILP required for Arunachal Pradesh — we help arrange it.",
+    showOnSite: true,
+    sortOrder: 3,
+  },
+  {
+    title: "Guwahati → Manas National Park",
+    duration: "2N / 3D",
+    vehicle: "SUV with driver",
+    kmOneWay: 180,
+    highlights: ["UNESCO World Heritage Site", "River rafting", "Tiger & golden langur spotting"],
+    showOnSite: true,
+    sortOrder: 4,
+  },
+  {
+    title: "Guwahati → Majuli Island",
+    duration: "3N / 4D",
+    vehicle: "Hatchback/SUV + ferry",
+    kmOneWay: 350,
+    highlights: ["World's largest river island", "Satras (Vaishnavite monasteries)", "Mask-making village"],
+    showOnSite: true,
+    sortOrder: 5,
+  },
+  {
+    title: "Guwahati city day tour",
+    duration: "1 day",
+    vehicle: "Hatchback or sedan with driver",
+    kmOneWay: 25,
+    highlights: ["Kamakhya Temple", "Umananda Island", "Assam State Museum", "Sunset cruise on the Brahmaputra"],
+    showOnSite: true,
+    sortOrder: 6,
+  },
+];
+
+export function defaultRoutes() {
+  return SEED_ROUTES.map((r, i) => ({
+    id: `seed-route-${i + 1}-${r.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`,
+    title: r.title,
+    duration: r.duration,
+    vehicle: r.vehicle,
+    kmOneWay: r.kmOneWay,
+    highlights: JSON.stringify(r.highlights),
+    note: r.note ?? null,
+    showOnSite: r.showOnSite,
+    sortOrder: r.sortOrder,
+  }));
+}
 
 export function defaultStays() {
   return SEED_HOTELS.map((h, i) => ({

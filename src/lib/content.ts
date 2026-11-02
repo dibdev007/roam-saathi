@@ -100,16 +100,24 @@ export type Route = {
   title: string;
   duration: string;
   vehicle: string;
+  kmOneWay: number; // approx one-way km from Guwahati — powers the fuel estimate
   highlights: string[];
   note?: string;
 };
 
+/**
+ * Built-in starter routes. v9: these live in the database (Admin → Routes)
+ * and are seeded from this list exactly once — the owner can edit or delete
+ * them permanently. This array remains only as the fallback when the
+ * database is unreachable, so the public site never looks broken.
+ */
 export const ROUTES: Route[] = [
   {
     id: "shillong-cherrapunji",
     title: "Guwahati → Shillong → Cherrapunji",
     duration: "3N / 4D",
     vehicle: "SUV (Innova / Scorpio) with driver",
+    kmOneWay: 150,
     highlights: ["Umiam Lake", "Elephant Falls", "Double Decker Living Root Bridge", "Nohkalikai Falls"],
   },
   {
@@ -117,6 +125,7 @@ export const ROUTES: Route[] = [
     title: "Guwahati → Kaziranga",
     duration: "2N / 3D",
     vehicle: "SUV or Innova with driver",
+    kmOneWay: 200,
     highlights: ["Early-morning elephant safari", "Central Range jeep safari", "Kaziranga Orchid Park"],
   },
   {
@@ -124,6 +133,7 @@ export const ROUTES: Route[] = [
     title: "Guwahati → Tawang",
     duration: "6N / 7D",
     vehicle: "SUV (Thar / Scorpio) with driver",
+    kmOneWay: 450,
     highlights: ["Bhalukpong / Sela Pass", "Tawang Monastery", "Madhuri Lake", "PTTso Lake"],
     note: "ILP required for Arunachal Pradesh — we help arrange it.",
   },
@@ -132,6 +142,7 @@ export const ROUTES: Route[] = [
     title: "Guwahati → Manas National Park",
     duration: "2N / 3D",
     vehicle: "SUV with driver",
+    kmOneWay: 180,
     highlights: ["UNESCO World Heritage Site", "River rafting", "Tiger & golden langur spotting"],
   },
   {
@@ -139,6 +150,7 @@ export const ROUTES: Route[] = [
     title: "Guwahati → Majuli Island",
     duration: "3N / 4D",
     vehicle: "Hatchback/SUV + ferry",
+    kmOneWay: 350,
     highlights: ["World's largest river island", "Satras (Vaishnavite monasteries)", "Mask-making village"],
   },
   {
@@ -146,6 +158,7 @@ export const ROUTES: Route[] = [
     title: "Guwahati city day tour",
     duration: "1 day",
     vehicle: "Hatchback or sedan with driver",
+    kmOneWay: 25,
     highlights: ["Kamakhya Temple", "Umananda Island", "Assam State Museum", "Sunset cruise on the Brahmaputra"],
   },
 ];
