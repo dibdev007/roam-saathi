@@ -443,12 +443,64 @@
 }
 .card-glow:hover::before { opacity: 1; }
 
+/* ------------------------------------------------------------------ */
+/* v9 — journey flourishes (route cards, hero, CTA micro-motion)       */
+/* ------------------------------------------------------------------ */
+
+/* Flowing dashes on SVG route lines — reads as moving traffic. */
+@keyframes rs-dash-flow {
+  to { stroke-dashoffset: -32; }
+}
+.rs-dash-flow {
+  stroke-dasharray: 5 11;
+  animation: rs-dash-flow 1.6s linear infinite;
+}
+
+/* Gentle pin bounce for journey milestones. */
+@keyframes rs-pin-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.animate-pin { animation: rs-pin-bounce 2.2s ease-in-out infinite; }
+
+/* Soft ping halo behind floating action pins. */
+@keyframes rs-halo {
+  0% { transform: scale(0.8); opacity: 0.7; }
+  80%, 100% { transform: scale(2.1); opacity: 0; }
+}
+.animate-halo { animation: rs-halo 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+/* Gradient ring that fades in around cards on hover. */
+.card-ring { position: relative; }
+.card-ring::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--saffron) 60%, transparent),
+    transparent 42%,
+    color-mix(in oklab, var(--forest) 45%, transparent)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.card-ring:hover::after { opacity: 1; }
+
 /* Reduced motion — disable decorative animation */
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .reveal { opacity: 1; transform: none; filter: none; transition: none; }
   .animate-float, .animate-float-slow, .animate-pulse-ring,
   .marquee-track, .hero-mesh, .animate-ken-burns,
-  .rs-orb, .rs-orb-slow, .rs-gradient-pan-text, .tab-in { animation: none !important; }
+  .rs-orb, .rs-orb-slow, .rs-gradient-pan-text, .tab-in,
+  .rs-dash-flow, .animate-pin, .animate-halo { animation: none !important; }
   .card-lift, .card-lift:hover { transform: none; }
 }

@@ -3,12 +3,13 @@ import * as path from "node:path";
 import { RoamSaathiApp } from "@/components/site/RoamSaathiApp";
 import { db } from "@/lib/db";
 import { ensureDatabaseReady } from "@/lib/dbReady";
-import { defaultFleetVehicles } from "@/lib/setupData";
+import { defaultFleetVehicles, defaultRoutes } from "@/lib/setupData";
 import type {
   VehicleDTO,
   SettingsMap,
   PageDTO,
   HotelDTO,
+  RouteDTO,
 } from "@/lib/siteConfig";
 
 export const dynamic = "force-dynamic";
@@ -105,12 +106,13 @@ async function loadSiteData(): Promise<{
   menuPages: PageDTO[];
   homePages: PageDTO[];
   hotels: HotelDTO[];
+  routes: RouteDTO[];
   dbOk: boolean;
 }> {
   try {
     await ensureDatabaseReady();
 
-    const [vehicleRows, settingsRows, menuRows, homeRows, hotelRows] = await Promise.all([
+    const [vehicleRows, settingsRows, menuRows, homeRows, hotelRows, routeRows] = await Promise.all([
       db.vehicle.findMany({
         where: { available: true },
         orderBy: [{ sortOrder: "asc" }, { dailyRate: "asc" }],
@@ -126,6 +128,10 @@ async function loadSiteData(): Promise<{
       }),
       db.hotel.findMany({
         where: { showOnSite: true, featured: true },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      }),
+      db.routeOffer.findMany({
+        where: { showOnSite: true },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       }),
     ]);
@@ -168,6 +174,7 @@ async function loadSiteData(): Promise<{
     });
 
     const hotels: HotelDTO[] = hotelRows.map((h) => ({ ...h }));
+    const routes: RouteDTO[] = routeRows.map((r) => ({ ...r }));
 
     return {
       vehicles,
@@ -175,6 +182,7 @@ async function loadSiteData(): Promise<{
       menuPages: menuRows.map(toDTO),
       homePages: homeRows.map(toDTO),
       hotels,
+      routes,
       dbOk: true,
     };
   } catch (e) {
@@ -185,6 +193,7 @@ async function loadSiteData(): Promise<{
       menuPages: [],
       homePages: [],
       hotels: [],
+      routes: [],
       dbOk: false,
     };
   }
@@ -192,7 +201,7 @@ async function loadSiteData(): Promise<{
 
 export default async function Page() {
   const images = detectImages();
-  const { vehicles, settings, menuPages, homePages, hotels, dbOk } = await loadSiteData();
+  const { vehicles, settings, menuPages, homePages, hotels, routes, dbOk } = await loadSiteData();
   return (
     <RoamSaathiApp
       images={images}
@@ -204,6 +213,8 @@ export default async function Page() {
       menuPages={menuPages}
       homePages={homePages}
       hotels={hotels}
+      // v9: same permanent-deletion promise for route cards.
+      routes={dbOk ? routes : defaultRoutes()}
     />
   );
 }
