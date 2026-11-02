@@ -10,7 +10,7 @@ import { CustomerView } from "@/components/site/CustomerView";
 import { SiteHeader, SiteFooter, FloatingButtons } from "@/components/site/chrome";
 import { ScrollProgress } from "@/components/site/motion";
 import { BookingModal, type BookingSeed } from "@/components/site/BookingModal";
-import type { VehicleDTO, SettingsMap, PageDTO, HotelDTO } from "@/lib/siteConfig";
+import type { VehicleDTO, SettingsMap, PageDTO, HotelDTO, RouteDTO } from "@/lib/siteConfig";
 
 type Images = Record<string, boolean>;
 
@@ -21,6 +21,7 @@ export function RoamSaathiApp({
   menuPages = [],
   homePages = [],
   hotels = [],
+  routes = [],
 }: {
   images: Images;
   vehicles?: VehicleDTO[];
@@ -28,6 +29,7 @@ export function RoamSaathiApp({
   menuPages?: PageDTO[];
   homePages?: PageDTO[];
   hotels?: HotelDTO[];
+  routes?: RouteDTO[];
 }) {
   const [bookingOpen, setBookingOpen] = React.useState(false);
   const [seed, setSeed] = React.useState<BookingSeed | null>(null);
@@ -55,6 +57,7 @@ export function RoamSaathiApp({
         settings={settings}
         homePages={homePages}
         hotels={hotels}
+        routes={routes}
         onBook={openBooking}
         onBookVehicle={openBookingForVehicle}
       />

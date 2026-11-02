@@ -53,13 +53,14 @@ import {
   HeroOrbs,
   StatCounter,
   Tilt,
+  Magnetic,
+  RoutePath,
   motion,
   AnimatePresence,
 } from "@/components/site/motion";
 import {
   TRUST_BADGES,
   STATS,
-  ROUTES,
   HOW_STEPS,
   REASONS,
   TESTIMONIALS,
@@ -70,10 +71,12 @@ import {
   VEHICLE_CLASSES,
   hotelImages,
   HOTEL_CATEGORY_STYLES,
+  routeHighlights,
   type VehicleDTO,
   type SettingsMap,
   type PageDTO,
   type HotelDTO,
+  type RouteDTO,
 } from "@/lib/siteConfig";
 import { getContact, getFuelPolicy, getMapEmbed } from "@/lib/contact";
 import { buildWhatsAppUrl, buildTelUrl } from "@/lib/whatsapp";
@@ -91,15 +94,6 @@ const CLASS_IMAGE: Record<string, string> = {
   SCOOTER: "fleet-scooter.png",
   BIKE: "fleet-scooter.png",
   VAN: "fleet-van.png",
-};
-
-const ROUTE_KM: Record<string, number> = {
-  "shillong-cherrapunji": 150,
-  kaziranga: 200,
-  tawang: 450,
-  manas: 180,
-  majuli: 350,
-  "guwahati-city": 25,
 };
 
 function heroSrc(images: Images): string {
@@ -160,20 +154,24 @@ function Hero({
           </Reveal>
           <Reveal delay={260}>
             <div className="mt-7 flex flex-wrap items-center gap-3">
-              <Button
-                onClick={onBook}
-                className="btn-sheen h-12 rounded-full bg-saffron px-6 text-[15px] font-extrabold text-saffron-foreground shadow-xl transition-transform hover:scale-[1.03]"
-              >
-                <CarIcon className="h-5 w-5" /> Book a vehicle
-              </Button>
-              <a
-                href={wa}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-12 items-center gap-2 rounded-full border border-cream/30 bg-cream/10 px-5 text-[15px] font-bold backdrop-blur transition-all hover:bg-cream/20"
-              >
-                <MessageCircle className="h-5 w-5" /> WhatsApp us
-              </a>
+              <Magnetic>
+                <Button
+                  onClick={onBook}
+                  className="btn-sheen h-12 rounded-full bg-saffron px-6 text-[15px] font-extrabold text-saffron-foreground shadow-xl transition-transform hover:scale-[1.03]"
+                >
+                  <CarIcon className="h-5 w-5" /> Book a vehicle
+                </Button>
+              </Magnetic>
+              <Magnetic>
+                <a
+                  href={wa}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-12 items-center gap-2 rounded-full border border-cream/30 bg-cream/10 px-5 text-[15px] font-bold backdrop-blur transition-all hover:bg-cream/20"
+                >
+                  <MessageCircle className="h-5 w-5" /> WhatsApp us
+                </a>
+              </Magnetic>
             </div>
           </Reveal>
           <Reveal delay={340}>
@@ -659,12 +657,109 @@ function RateCard({ vehicles }: { vehicles: VehicleDTO[] }) {
 }
 
 /* ================================================================== */
-/* Routes                                                              */
+/* Routes — v9: DB-driven (Admin → Routes), animated journey cards     */
 /* ================================================================== */
 
-function Routes({ settings }: { settings?: SettingsMap }) {
+function RouteCard({
+  route,
+  index,
+  settings,
+}: {
+  route: RouteDTO;
+  index: number;
+  settings?: SettingsMap;
+}) {
+  const contact = getContact(settings);
   const policy = getFuelPolicy(settings);
   const price = policy.fuelPricePerLitre;
+  const km = Math.max(1, Math.round(route.kmOneWay || 100));
+  const litres = Math.ceil((km * 2) / 14);
+  const stops = routeHighlights(route);
+  const wa = buildWhatsAppUrl(
+    `Hello Roam Saathi! I'm interested in the "${route.title}" trip${route.duration ? ` (${route.duration})` : ""}. Please share an all-in quote.`,
+    contact.whatsapp
+  );
+
+  return (
+    <Reveal delay={(index % 3) * 90}>
+      <Card className="card-lift card-ring group flex h-full flex-col border-forest/10 bg-white">
+        <CardContent className="flex flex-1 flex-col p-5">
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-display text-lg font-bold leading-snug text-forest">
+              {route.title}
+            </p>
+            {route.duration ? (
+              <Badge className="flex-none rounded-full bg-forest/10 text-[11px] font-bold text-forest">
+                {route.duration}
+              </Badge>
+            ) : null}
+          </div>
+
+          {/* Animated journey line — draws itself, pins pop at both ends */}
+          <div className="my-2 text-forest/45">
+            <RoutePath flips={index % 2 === 1} className="h-10 w-full" />
+          </div>
+
+          {stops.length > 0 && (
+            <ul className="space-y-1.5">
+              {stops.slice(0, 3).map((h) => (
+                <li key={h} className="flex items-start gap-2 text-[13px] text-ink/75">
+                  <MapPin className="mt-0.5 h-3.5 w-3.5 flex-none text-saffron-deep" />
+                  {h}
+                </li>
+              ))}
+              {stops.length > 3 && (
+                <li className="pl-5 text-[12px] italic text-ink/50">
+                  +{stops.length - 3} more stop{stops.length - 3 > 1 ? "s" : ""}
+                </li>
+              )}
+            </ul>
+          )}
+
+          {route.vehicle && (
+            <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-forest/80">
+              <CarIcon className="h-3.5 w-3.5" /> {route.vehicle}
+            </p>
+          )}
+          {route.note && (
+            <p className="mt-2 rounded-lg bg-saffron/10 px-2.5 py-1.5 text-[11px] font-medium text-ink/80">
+              {route.note}
+            </p>
+          )}
+
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-cream px-3 py-2 text-[11px] font-semibold text-ink/75">
+            <span className="inline-flex items-center gap-1">
+              <Navigation className="h-3 w-3 text-forest" /> ~{km} km one-way
+            </span>
+            <span className="inline-flex items-center gap-1 text-saffron-deep">
+              <Fuel className="h-3 w-3" /> self-drive ≈ {litres} L ≈ {inr(litres * price)} rt
+            </span>
+          </div>
+
+          {/* One-tap WhatsApp per route — message comes pre-filled */}
+          <a
+            href={wa}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-full border border-forest/15 bg-forest/[0.04] px-4 text-[13px] font-bold text-forest transition-all duration-300 hover:border-forest/30 hover:bg-forest hover:text-cream"
+            aria-label={`Plan the ${route.title} trip on WhatsApp`}
+          >
+            <MessageCircle className="h-4 w-4" /> Plan this trip
+            <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
+          </a>
+        </CardContent>
+      </Card>
+    </Reveal>
+  );
+}
+
+function Routes({
+  settings,
+  routes = [],
+}: {
+  settings?: SettingsMap;
+  routes?: RouteDTO[];
+}) {
   return (
     <section id="routes" className="py-16 sm:py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -673,61 +768,64 @@ function Routes({ settings }: { settings?: SettingsMap }) {
           title="Where will the road take you?"
           sub="Fuel differs on every route — hills climb, plains cruise. Pick with-driver for a fully inclusive fare, or self-drive and budget with the estimates below."
         />
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {ROUTES.map((r, i) => {
-            const km = ROUTE_KM[r.id] ?? 100;
-            const litres = Math.ceil((km * 2) / 14);
-            return (
-              <Reveal key={r.id} delay={(i % 3) * 90}>
-                <Card className="card-lift flex h-full flex-col border-forest/10 bg-white">
-                  <CardContent className="flex flex-1 flex-col p-5">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-display text-lg font-bold leading-snug text-forest">
-                        {r.title}
-                      </p>
-                      <Badge className="flex-none rounded-full bg-forest/10 text-[11px] font-bold text-forest">
-                        {r.duration}
-                      </Badge>
-                    </div>
-                    <div className="route-dots my-3 h-0.5 w-full opacity-60" />
-                    <ul className="space-y-1.5">
-                      {r.highlights.slice(0, 3).map((h) => (
-                        <li key={h} className="flex items-start gap-2 text-[13px] text-ink/75">
-                          <MapPin className="mt-0.5 h-3.5 w-3.5 flex-none text-saffron-deep" />
-                          {h}
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-forest/80">
-                      <CarIcon className="h-3.5 w-3.5" /> {r.vehicle}
-                    </p>
-                    {r.note && (
-                      <p className="mt-2 rounded-lg bg-saffron/10 px-2.5 py-1.5 text-[11px] font-medium text-ink/80">
-                        {r.note}
-                      </p>
-                    )}
-                    <div className="mt-auto flex items-center justify-between gap-2 rounded-xl bg-cream px-3 py-2 pt-2 text-[11px] font-semibold text-ink/75 mt-3">
-                      <span className="inline-flex items-center gap-1">
-                        <Navigation className="h-3 w-3 text-forest" /> ~{km} km one-way
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-saffron-deep">
-                        <Fuel className="h-3 w-3" /> self-drive ≈ {litres} L ≈ {inr(litres * price)} rt
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Reveal>
-            );
-          })}
-        </div>
+        <Reveal delay={80}>
+          <div className="mx-auto mt-2 max-w-2xl text-saffron-deep/70">
+            <RoutePath className="h-12 w-full" />
+          </div>
+        </Reveal>
+
+        {routes.length === 0 ? (
+          <Reveal delay={120}>
+            <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-dashed border-forest/25 bg-white/70 p-8 text-center">
+              <MapPinned className="mx-auto h-9 w-9 text-forest/30" />
+              <p className="font-display mt-3 text-lg font-bold text-forest">
+                New routes are being mapped
+              </p>
+              <p className="mt-1.5 text-sm text-ink/65">
+                Our classic Northeast itineraries are being refreshed. Tell us where
+                you want to go — we&apos;ll plan it with you on WhatsApp within minutes.
+              </p>
+              <RouteWaButton settings={settings} className="mt-5" />
+            </div>
+          </Reveal>
+        ) : (
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {routes.map((r, i) => (
+              <RouteCard key={r.id} route={r} index={i} settings={settings} />
+            ))}
+          </div>
+        )}
+
         <Reveal delay={150}>
           <p className="mx-auto mt-6 max-w-2xl text-center text-xs leading-relaxed text-muted-foreground">
-            Fuel estimates assume ~14 km/l round trips at {inr(price)}/litre — indicative only.
+            Fuel estimates assume ~14 km/l round trips at {inr(getFuelPolicy(settings).fuelPricePerLitre)}/litre — indicative only.
             With-driver fares already include every litre, every toll, every parking fee.
           </p>
         </Reveal>
       </div>
     </section>
+  );
+}
+
+/* Small helper — generic "ask on WhatsApp" button used by empty states. */
+function RouteWaButton({ settings, className }: { settings?: SettingsMap; className?: string }) {
+  const contact = getContact(settings);
+  const wa = buildWhatsAppUrl(
+    "Hello Roam Saathi! I want to plan a road trip in Northeast India. Please suggest routes and an all-in quote.",
+    contact.whatsapp
+  );
+  return (
+    <a
+      href={wa}
+      target="_blank"
+      rel="noreferrer"
+      className={cn(
+        "inline-flex h-11 items-center gap-2 rounded-full bg-forest px-5 text-sm font-bold text-cream shadow-lg transition-transform hover:scale-[1.03]",
+        className
+      )}
+    >
+      <MessageCircle className="h-4 w-4" /> Ask on WhatsApp
+    </a>
   );
 }
 
@@ -1158,20 +1256,24 @@ function FinalCta({ onBook, settings }: { onBook: () => void; settings?: Setting
             honest, all-in quote within minutes.
           </p>
           <div className="relative mt-7 flex flex-wrap justify-center gap-3">
-            <Button
-              onClick={onBook}
-              className="btn-sheen h-12 rounded-full bg-saffron px-7 text-[15px] font-extrabold text-saffron-foreground shadow-xl transition-transform hover:scale-[1.03]"
-            >
-              <CarIcon className="h-5 w-5" /> Book a vehicle
-            </Button>
-            <a
-              href={wa}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-12 items-center gap-2 rounded-full border border-cream/30 bg-cream/10 px-6 text-[15px] font-bold backdrop-blur hover:bg-cream/20"
-            >
-              <MessageCircle className="h-5 w-5" /> WhatsApp {contact.phoneDisplay}
-            </a>
+            <Magnetic>
+              <Button
+                onClick={onBook}
+                className="btn-sheen h-12 rounded-full bg-saffron px-7 text-[15px] font-extrabold text-saffron-foreground shadow-xl transition-transform hover:scale-[1.03]"
+              >
+                <CarIcon className="h-5 w-5" /> Book a vehicle
+              </Button>
+            </Magnetic>
+            <Magnetic>
+              <a
+                href={wa}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-12 items-center gap-2 rounded-full border border-cream/30 bg-cream/10 px-6 text-[15px] font-bold backdrop-blur hover:bg-cream/20"
+              >
+                <MessageCircle className="h-5 w-5" /> WhatsApp {contact.phoneDisplay}
+              </a>
+            </Magnetic>
           </div>
           <p className="relative mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs text-cream/65">
             <span className="inline-flex items-center gap-1.5">
@@ -1200,6 +1302,7 @@ export function CustomerView({
   settings = {},
   homePages = [],
   hotels = [],
+  routes = [],
   onBook,
   onBookVehicle,
 }: {
@@ -1208,6 +1311,7 @@ export function CustomerView({
   settings?: SettingsMap;
   homePages?: PageDTO[];
   hotels?: HotelDTO[];
+  routes?: RouteDTO[];
   onBook: () => void;
   onBookVehicle: BookVehicleFn;
 }) {
@@ -1217,7 +1321,7 @@ export function CustomerView({
       <TrustMarquee settings={settings} />
       <Fleet images={images} vehicles={vehicles} settings={settings} onBookVehicle={onBookVehicle} />
       {vehicles.length > 0 && <RateCard vehicles={vehicles} />}
-      <Routes settings={settings} />
+      <Routes settings={settings} routes={routes} />
       <HowItWorks />
       <WhyUs />
       <StaysPreview hotels={hotels} />

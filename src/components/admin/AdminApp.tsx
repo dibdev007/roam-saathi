@@ -14,6 +14,7 @@ import {
   Users,
   BookOpen,
   Building2,
+  Route as RouteIcon,
   TrendingUp,
   Settings as SettingsIcon,
   Database,
@@ -32,6 +33,7 @@ import { BookingsManager } from "@/components/admin/BookingsManager";
 import { CustomersManager } from "@/components/admin/CustomersManager";
 import { PagesManager } from "@/components/admin/PagesManager";
 import { HotelsManager } from "@/components/admin/HotelsManager";
+import { RoutesManager } from "@/components/admin/RoutesManager";
 import { GrowthTab } from "@/components/admin/GrowthTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
 import { DatabaseTab } from "@/components/admin/DatabaseTab";
@@ -43,6 +45,7 @@ import {
   type SettingsMap,
   type PageDTO,
   type HotelDTO,
+  type RouteDTO,
   type CustomerDTO,
   type AgreementDTO,
 } from "@/lib/siteConfig";
@@ -54,6 +57,7 @@ type TabKey =
   | "customers"
   | "pages"
   | "stays"
+  | "routes"
   | "growth"
   | "settings"
   | "database";
@@ -65,6 +69,7 @@ const TAB_META: { key: TabKey; label: string; icon: React.ElementType }[] = [
   { key: "customers", label: "Customers", icon: Users },
   { key: "pages", label: "Website Pages", icon: BookOpen },
   { key: "stays", label: "Stays & Partners", icon: Building2 },
+  { key: "routes", label: "Popular Routes", icon: RouteIcon },
   { key: "growth", label: "Growth & SEO", icon: TrendingUp },
   { key: "settings", label: "Settings", icon: SettingsIcon },
   { key: "database", label: "Database", icon: Database },
@@ -78,6 +83,7 @@ export function AdminApp() {
   const [settings, setSettings] = React.useState<SettingsMap>({});
   const [pages, setPages] = React.useState<PageDTO[]>([]);
   const [hotels, setHotels] = React.useState<HotelDTO[]>([]);
+  const [routes, setRoutes] = React.useState<RouteDTO[]>([]);
   const [customers, setCustomers] = React.useState<CustomerDTO[]>([]);
   const [agreements, setAgreements] = React.useState<AgreementDTO[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -85,12 +91,13 @@ export function AdminApp() {
   const refresh = React.useCallback(async () => {
     setLoading(true);
     try {
-      const [vRes, bRes, sRes, pRes, hRes, cRes, aRes] = await Promise.all([
+      const [vRes, bRes, sRes, pRes, hRes, rRes, cRes, aRes] = await Promise.all([
         fetch("/api/vehicles", { cache: "no-store" }),
         fetch("/api/bookings", { cache: "no-store" }),
         fetch("/api/settings", { cache: "no-store" }),
         fetch("/api/admin/pages", { cache: "no-store" }),
         fetch("/api/admin/hotels", { cache: "no-store" }),
+        fetch("/api/admin/routes", { cache: "no-store" }),
         fetch("/api/admin/customers", { cache: "no-store" }),
         fetch("/api/admin/agreements", { cache: "no-store" }),
       ]);
@@ -113,6 +120,10 @@ export function AdminApp() {
       if (hRes.ok) {
         const j = await hRes.json();
         setHotels(j.hotels ?? []);
+      }
+      if (rRes.ok) {
+        const j = await rRes.json();
+        setRoutes(j.routes ?? []);
       }
       if (cRes.ok) {
         const j = await cRes.json();
@@ -238,6 +249,9 @@ export function AdminApp() {
           )}
           {tab === "stays" && (
             <HotelsManager hotels={hotels} loading={loading} onRefresh={refresh} />
+          )}
+          {tab === "routes" && (
+            <RoutesManager routes={routes} loading={loading} onRefresh={refresh} />
           )}
           {tab === "growth" && (
             <GrowthTab

@@ -246,6 +246,139 @@ export function Tilt({
 }
 
 /* ------------------------------------------------------------------ */
+/* Magnetic — CTA wrapper that gently follows the pointer.             */
+/* Transform-only (GPU), spring-smoothed, desktop pointers only, and    */
+/* fully disabled for prefers-reduced-motion users.                     */
+/* ------------------------------------------------------------------ */
+
+export function Magnetic({
+  children,
+  className,
+  strength = 0.28,
+  max = 7,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  strength?: number;
+  max?: number;
+}) {
+  const reduce = useReducedMotion();
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const sx = useSpring(x, { stiffness: 260, damping: 18, mass: 0.4 });
+  const sy = useSpring(y, { stiffness: 260, damping: 18, mass: 0.4 });
+
+  // Fine pointers only (mouse/trackpad) — touch devices never get listeners.
+  const fine =
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: fine)").matches;
+
+  function onMove(e: React.PointerEvent<HTMLSpanElement>) {
+    if (reduce || !fine || !ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    const dx = (e.clientX - (rect.left + rect.width / 2)) * strength;
+    const dy = (e.clientY - (rect.top + rect.height / 2)) * strength;
+    x.set(Math.max(-max, Math.min(max, dx)));
+    y.set(Math.max(-max, Math.min(max, dy)));
+  }
+
+  function onLeave() {
+    x.set(0);
+    y.set(0);
+  }
+
+  if (reduce) return <span className={cn("inline-block", className)}>{children}</span>;
+
+  return (
+    <motion.span
+      ref={ref}
+      onPointerMove={onMove}
+      onPointerLeave={onLeave}
+      style={{ x: sx, y: sy }}
+      className={cn("inline-block will-change-transform", className)}
+    >
+      {children}
+    </motion.span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* RoutePath — a winding road that draws itself when scrolled into     */
+/* view, with a subtle moving-dash "traffic" overlay and origin /      */
+/* destination pins. Pure inline SVG (a few hundred bytes), transform  */
+/* and stroke-dashoffset only — no images, no JS after hydration.      */
+/* ------------------------------------------------------------------ */
+
+export function RoutePath({
+  className,
+  flips = false,
+  showPins = true,
+}: {
+  className?: string;
+  flips?: boolean;
+  showPins?: boolean;
+}) {
+  const reduce = useReducedMotion();
+  const d = flips
+    ? "M8 30 C 60 2, 110 58, 160 26 S 250 4, 292 30"
+    : "M8 26 C 60 54, 110 2, 160 30 S 250 54, 292 26";
+
+  if (reduce) {
+    return (
+      <svg viewBox="0 0 300 56" fill="none" aria-hidden className={className}>
+        <path d={d} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 8" opacity="0.55" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 300 56" fill="none" aria-hidden className={className}>
+      {/* static dotted guide */}
+      <path d={d} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="1 8" opacity="0.35" />
+      {/* self-drawing solid road */}
+      <motion.path
+        d={d}
+        stroke="currentColor"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        initial={{ pathLength: 0, opacity: 0.9 }}
+        whileInView={{ pathLength: 1, opacity: 1 }}
+        viewport={{ once: true, margin: "-60px" }}
+        transition={{ duration: 1.5, ease: [0.22, 1, 0.36, 1] }}
+      />
+      {/* origin pin */}
+      {showPins && (
+        <motion.circle
+          cx="8"
+          cy={flips ? 30 : 26}
+          r="4"
+          className="fill-saffron"
+          initial={{ scale: 0, opacity: 0 }}
+          whileInView={{ scale: 1, opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.15, type: "spring", stiffness: 300, damping: 16 }}
+        />
+      )}
+      {/* destination pin pops in when the road finishes drawing */}
+      {showPins && (
+        <motion.g
+          initial={{ scale: 0, opacity: 0 }}
+          whileInView={{ scale: 1, opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ delay: 1.35, type: "spring", stiffness: 300, damping: 14 }}
+          style={{ transformOrigin: "292px 30px" }}
+        >
+          <circle cx="292" cy={flips ? 30 : 26} r="7" className="fill-saffron/25" />
+          <circle cx="292" cy={flips ? 30 : 26} r="3.6" className="fill-forest" />
+        </motion.g>
+      )}
+    </svg>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* FadeSwap — soft enter/exit for filtered grids                        */
 /* ------------------------------------------------------------------ */
 
